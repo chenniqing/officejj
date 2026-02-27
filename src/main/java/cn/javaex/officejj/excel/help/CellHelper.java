@@ -1,8 +1,10 @@
 package cn.javaex.officejj.excel.help;
 
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
@@ -18,10 +20,13 @@ import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 
+import org.apache.poi.util.IOUtils;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.ClientAnchor;
 import org.apache.poi.ss.usermodel.Drawing;
+import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.DefaultIndexedColorMap;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFClientAnchor;
@@ -34,6 +39,7 @@ import cn.javaex.officejj.common.entity.Font;
 import cn.javaex.officejj.common.entity.Picture;
 import cn.javaex.officejj.common.entity.RGB;
 import cn.javaex.officejj.common.util.ImageHandler;
+import cn.javaex.officejj.excel.style.ICellStyle;
 
 /**
  * Cell
@@ -41,6 +47,25 @@ import cn.javaex.officejj.common.util.ImageHandler;
  * @author 陈霓清
  */
 public class CellHelper extends SheetHelper {
+	
+	/**
+	 * 自动获得它所处的合并区域
+	 * @param cell
+	 * @return
+	 */
+	public CellRangeAddress getMergedRegion(Cell cell) {
+		Sheet sheet = cell.getSheet();
+	    int rowIndex = cell.getRowIndex();
+	    int colIndex = cell.getColumnIndex();
+	    int mergedCount = sheet.getNumMergedRegions();
+	    for (int i = 0; i < mergedCount; i++) {
+	        CellRangeAddress range = sheet.getMergedRegion(i);
+	        if (range.isInRange(rowIndex, colIndex)) {
+	            return range;
+	        }
+	    }
+	    return null; // 说明该cell不在合并区域内
+	}
 	
 	/**
 	 * 提取${xx}中的文本
@@ -63,47 +88,139 @@ public class CellHelper extends SheetHelper {
 	/**
 	 * 设置图片
 	 * @param cell
-	 * @param path
-	 * @throws IOException 
+	 * @param imgStream
+	 * @param fileSuffix
+	 * @param width
+	 * @param height
 	 */
-	public void setImage(Cell cell, String path, Integer width, Integer height) {
-		try {
-			if (path==null || path.length()==0) {
-				cell.setCellValue("");
-				return;
-			}
-			
-			if (width!=null) {
-				cell.getSheet().setColumnWidth(cell.getColumnIndex(), width * 32);
-			}
-			if (height==null) {
-				height = 100;
-			}
+	public void setImage(Cell cell, InputStream imgStream, String fileSuffix, Integer width, Integer height) {
+		if (imgStream == null) {
+			cell.setCellValue("");
+			return;
+		}
+		
+		Sheet sheet = cell.getSheet();
+		
+		if (width != null && height != null) {
+			sheet.setColumnWidth(cell.getColumnIndex(), width * 32);
 			cell.getRow().setHeight((short) (height * 15));
-			
+		}
+		
+		try {
 			ByteArrayOutputStream byteArrayOut = new ByteArrayOutputStream();
-			// 图片后缀
-			String fileSuffix = path.substring(path.lastIndexOf(".") + 1).toLowerCase();
-			if (fileSuffix.length()>5) {
-				fileSuffix = "jpg";
-			}
 			
-			BufferedImage bufferImg = ImageIO.read(ImageHandler.getImageStream(path));
-			ImageIO.write(bufferImg, fileSuffix, byteArrayOut);
-			
-			Drawing<?> patriarch = cell.getSheet().createDrawingPatriarch();
-			ClientAnchor anchor = new XSSFClientAnchor(0, 0, 0, 0, (short) cell.getColumnIndex(), cell.getRow().getRowNum(), (short) (cell.getColumnIndex() + 1), cell.getRow().getRowNum() + 1);
-			
-			int imageType = Workbook.PICTURE_TYPE_JPEG;
+			// 使用传入的InputStream和图片后缀名
+			fileSuffix = fileSuffix.toLowerCase();
+	        BufferedImage bufferImg = ImageIO.read(imgStream);
+	        ImageIO.write(bufferImg, fileSuffix, byteArrayOut);
+	        
+	        Drawing<?> patriarch = sheet.createDrawingPatriarch();
+	        
+	        int imageType = Workbook.PICTURE_TYPE_JPEG;
 			if ("png".equals(fileSuffix)) {
 				imageType = Workbook.PICTURE_TYPE_PNG;
 			}
-			patriarch.createPicture(anchor, cell.getSheet().getWorkbook().addPicture(byteArrayOut.toByteArray(), imageType));
+			
+			ClientAnchor anchor = null;
+			CellRangeAddress region = getMergedRegion(cell);
+			int marginX = 0;
+			int marginY = 0;
+			
+			if (region != null) {
+				anchor = new XSSFClientAnchor(
+						marginX, marginY,
+						-marginX, -marginY,
+						region.getFirstColumn(), region.getFirstRow(),
+						region.getLastColumn() + 1, region.getLastRow() + 1
+				);
+			} else {
+				anchor = new XSSFClientAnchor(
+						marginX, marginY,
+						-marginX, -marginY,
+						(short) cell.getColumnIndex(), cell.getRow().getRowNum(),
+						(short) (cell.getColumnIndex() + 1), cell.getRow().getRowNum() + 1
+				);
+			}
+			
+			anchor.setAnchorType(ClientAnchor.AnchorType.DONT_MOVE_AND_RESIZE);
+			patriarch.createPicture(anchor, sheet.getWorkbook().addPicture(byteArrayOut.toByteArray(), imageType));
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
 
+	/**
+	 * 设置图片
+	 * @param cell
+	 * @param path
+	 * @throws IOException 
+	 */
+	public void setImage(Cell cell, String path, Integer width, Integer height) {
+	    if (path == null || path.length() == 0) {
+	        cell.setCellValue("");
+	        return;
+	    }
+	 
+	    Sheet sheet = cell.getSheet();
+	 
+	    if (width != null && height != null) {
+	        sheet.setColumnWidth(cell.getColumnIndex(), width * 32);
+	        cell.getRow().setHeight((short) (height * 15));
+	    }
+	 
+	    try {
+	        // 图片后缀
+	        String fileSuffix = path.substring(path.lastIndexOf(".") + 1).toLowerCase();
+	        if (fileSuffix.length() > 5) {
+	            fileSuffix = "jpg";
+	        }
+	 
+	        // 读取图片字节数据
+	        InputStream imageStream = ImageHandler.getImageStream(path);
+	        byte[] bytes = IOUtils.toByteArray(imageStream);
+	        imageStream.close();
+	 
+	        // 设定内边距（px）
+	        int paddingPx = 20;
+	        int paddingEMU = paddingPx * 9525;
+	 
+	        Drawing<?> patriarch = sheet.createDrawingPatriarch();
+	 
+	        int imageType = Workbook.PICTURE_TYPE_JPEG;
+	        if ("png".equals(fileSuffix)) {
+	            imageType = Workbook.PICTURE_TYPE_PNG;
+	        }
+	 
+	        ClientAnchor anchor = null;
+	        // 判断是否是合并单元格
+	        CellRangeAddress region = getMergedRegion(cell);
+	 
+	        if (region != null) {
+	            anchor = new XSSFClientAnchor(
+	                    paddingEMU, paddingEMU, // dx1, dy1: 左上内边距
+	                    -paddingEMU, -paddingEMU, // dx2, dy2: 右下内边距(负值内缩)
+	                    region.getFirstColumn(), region.getFirstRow(), // 起始单元格
+	                    region.getLastColumn() + 1, region.getLastRow() + 1 // 结束单元格（闭区间+1）
+	            );
+	        } else {
+	            anchor = new XSSFClientAnchor(
+	                    paddingEMU, paddingEMU,
+	                    -paddingEMU, -paddingEMU,
+	                    (short) cell.getColumnIndex(), cell.getRow().getRowNum(),
+	                    (short) (cell.getColumnIndex() + 1), cell.getRow().getRowNum() + 1
+	            );
+	        }
+	 
+	        anchor.setAnchorType(ClientAnchor.AnchorType.DONT_MOVE_AND_RESIZE);
+	 
+	        int picIndex = sheet.getWorkbook().addPicture(bytes, imageType);
+	        patriarch.createPicture(anchor, picIndex);
+	 
+	    } catch (Exception e) {
+	        e.printStackTrace();
+	    }
+	}
+	
 	/**
 	 * 替换模板中的占位符（占位符独占一格单元格）
 	 * @param cell
@@ -111,10 +228,12 @@ public class CellHelper extends SheetHelper {
 	 */
 	public void setValue(Cell cell, Object obj) {
 		if (obj==null) {
-			return;
+			cell.setCellValue((String) obj);
 		}
 		else if (obj instanceof String) {
-			cell.setCellValue((String) obj);
+			if (obj.equals(PLACEHOLDER_CLEAR) == false) {
+				cell.setCellValue((String) obj);
+			}
 		}
 		else if (obj instanceof Integer) {
 			cell.setCellValue(Integer.parseInt(obj.toString()));
@@ -158,7 +277,15 @@ public class CellHelper extends SheetHelper {
 		else if (obj instanceof Picture) {
 			cell.setCellValue("");
 			Picture picture = (Picture) obj;
-			this.setImage(cell, picture.getUrl(), picture.getWidth(), picture.getHeight());
+			if (picture.getUrl() != null && !picture.getUrl().isEmpty()) {
+				this.setImage(cell, picture.getUrl(), picture.getWidth(), picture.getHeight());
+			} else if (picture.getData() != null) {
+				try (InputStream is = new ByteArrayInputStream(picture.getData())) {
+					this.setImage(cell, is, picture.getFileSuffix(), picture.getWidth(), picture.getHeight());
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 		else {
 			cell.setCellValue(obj.toString());
@@ -234,6 +361,22 @@ public class CellHelper extends SheetHelper {
 		}
 		
 		return fontSetting;
+	}
+
+	/**
+	 * 设置单元格样式
+	 * @param cell
+	 * @param clazz
+	 */
+	public void setCellStyle(Cell cell, Class<?> clazz) {
+		try {
+			Sheet sheet = cell.getSheet();
+			
+			ICellStyle styleProvider = (ICellStyle) clazz.getDeclaredConstructor().newInstance();
+			cell.setCellStyle(styleProvider.createDataStyle(sheet.getWorkbook()));
+		} catch (Exception e) {
+			throw new RuntimeException("设置单元格样式失败", e);
+		}
 	}
 
 }

@@ -5,7 +5,7 @@ package cn.javaex.officejj.excel.entity;
  * 
  * @author 陈霓清
  */
-public class VerticalMerge extends Merge {
+public class VerticalMerge extends CellArea {
 
 	public VerticalMerge() {
 		

@@ -3,9 +3,12 @@ package cn.javaex.officejj.excel.help;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.util.CellRangeAddress;
 
+import cn.javaex.officejj.excel.ExcelUtils;
 import cn.javaex.officejj.excel.entity.TransversalMerge;
 import cn.javaex.officejj.excel.entity.VerticalMerge;
+import cn.javaex.officejj.excel.style.ICellStyle;
 
 /**
  * 合并
@@ -20,12 +23,29 @@ public class SheetMergeHelper extends SheetHelper {
 	private VerticalMerge verticalMerge = null;           // 纵向合并类
 	
 	/**
+	 * 返回：如果cell在某合并区则返回对应region，否则null
+	 * @param sheet
+	 * @param rowIdx
+	 * @param colIdx
+	 * @return
+	 */
+	public CellRangeAddress getMergedRegion(Sheet sheet, int rowIdx, int colIdx) {
+		for (CellRangeAddress range : sheet.getMergedRegions()) {
+			if (range.isInRange(rowIdx, colIdx)) {
+				return range;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * 设置表头合并
 	 * @param sheet
 	 * @param rowIndex
 	 * @param headerRows
+	 * @throws Exception 
 	 */
-	public void setHeaderMerge(Sheet sheet, int rowIndex, int headerRows) {
+	public void setHeaderMerge(Sheet sheet, int rowIndex, int headerRows) throws Exception {
 		// 设置横向合并
 		this.setTransverseMerge(sheet, rowIndex, headerRows);
 		
@@ -38,8 +58,9 @@ public class SheetMergeHelper extends SheetHelper {
 	 * @param sheet
 	 * @param rowIndex
 	 * @param headerRows
+	 * @throws Exception 
 	 */
-	private void setTransverseMerge(Sheet sheet, int rowIndex, int headerRows) {
+	private void setTransverseMerge(Sheet sheet, int rowIndex, int headerRows) throws Exception {
 		for (int i=0; i<headerRows; i++) {
 			Row row = sheet.getRow(i);
 			int lastCellNum = row.getLastCellNum();    // 一共多少列
@@ -59,7 +80,7 @@ public class SheetMergeHelper extends SheetHelper {
 						}
 					} else {
 						if (transversalMerge!=null) {
-							super.setMerge(sheet, transversalMerge.getFirstRow(), transversalMerge.getLastRow(), transversalMerge.getFirstCol(), transversalMerge.getLastCol());
+							this.setMerge(sheet, transversalMerge.getFirstRow(), transversalMerge.getLastRow(), transversalMerge.getFirstCol(), transversalMerge.getLastCol(), null);
 							transverseVlaue = null;
 							transversalMerge = null;
 						}
@@ -73,7 +94,7 @@ public class SheetMergeHelper extends SheetHelper {
 					transverseVlaue = null;
 					
 					if (transversalMerge!=null) {
-						super.setMerge(sheet, transversalMerge.getFirstRow(), transversalMerge.getLastRow(), transversalMerge.getFirstCol(), transversalMerge.getLastCol());
+						this.setMerge(sheet, transversalMerge.getFirstRow(), transversalMerge.getLastRow(), transversalMerge.getFirstCol(), transversalMerge.getLastCol(), null);
 						transverseVlaue = null;
 						transversalMerge = null;
 					}
@@ -83,7 +104,7 @@ public class SheetMergeHelper extends SheetHelper {
 		
 		// 最后一行遍历完成后设置横向合并
 		if (transversalMerge!=null) {
-			super.setMerge(sheet, transversalMerge.getFirstRow(), transversalMerge.getLastRow(), transversalMerge.getFirstCol(), transversalMerge.getLastCol());
+			this.setMerge(sheet, transversalMerge.getFirstRow(), transversalMerge.getLastRow(), transversalMerge.getFirstCol(), transversalMerge.getLastCol(), null);
 			transverseVlaue = null;
 			transversalMerge = null;
 		}
@@ -94,8 +115,9 @@ public class SheetMergeHelper extends SheetHelper {
 	 * @param sheet
 	 * @param rowIndex
 	 * @param headerRows
+	 * @throws Exception 
 	 */
-	private void setVerticalMerge(Sheet sheet, int rowIndex, int headerRows) {
+	private void setVerticalMerge(Sheet sheet, int rowIndex, int headerRows) throws Exception {
 		Row row = sheet.getRow(rowIndex);
 		int lastCellNum = row.getLastCellNum();    // 一共多少列
 		
@@ -118,7 +140,7 @@ public class SheetMergeHelper extends SheetHelper {
 						}
 					} else {
 						if (verticalMerge!=null) {
-							super.setMerge(sheet, verticalMerge.getFirstRow(), verticalMerge.getLastRow(), verticalMerge.getFirstCol(), verticalMerge.getLastCol());
+							this.setMerge(sheet, verticalMerge.getFirstRow(), verticalMerge.getLastRow(), verticalMerge.getFirstCol(), verticalMerge.getLastCol(), null);
 							verticalVlaue = null;
 							verticalMerge = null;
 						}
@@ -132,7 +154,7 @@ public class SheetMergeHelper extends SheetHelper {
 					verticalVlaue = null;
 					
 					if (verticalMerge!=null) {
-						super.setMerge(sheet, verticalMerge.getFirstRow(), verticalMerge.getLastRow(), verticalMerge.getFirstCol(), verticalMerge.getLastCol());
+						this.setMerge(sheet, verticalMerge.getFirstRow(), verticalMerge.getLastRow(), verticalMerge.getFirstCol(), verticalMerge.getLastCol(), null);
 						verticalMerge = null;
 					}
 				}
@@ -141,9 +163,113 @@ public class SheetMergeHelper extends SheetHelper {
 		
 		// 最后一列遍历完成后设置合并
 		if (verticalMerge!=null) {
-			super.setMerge(sheet, verticalMerge.getFirstRow(), verticalMerge.getLastRow(), verticalMerge.getFirstCol(), verticalMerge.getLastCol());
+			this.setMerge(sheet, verticalMerge.getFirstRow(), verticalMerge.getLastRow(), verticalMerge.getFirstCol(), verticalMerge.getLastCol(), null);
 			verticalVlaue = null;
 			verticalMerge = null;
+		}
+	}
+	
+	/**
+	 * 自动合并列
+	 * 
+	 * @param sheet
+	 * @param colNum      第几列（从0开始计算）
+	 * @param firstRow    起始行（从0开始计算）
+	 * @param lastRow     终止行（从0开始计算）
+	 * @param clazz
+	 */
+	@Override
+	public void setAutoMergeCol(Sheet sheet, int colNum, int firstRow, int lastRow, Class<?> clazz) {
+		// 合并定义
+		int mergeRowBegin = 0;
+		int mergeRowEnd = 0;
+		String mergeName = null;    // 合并内容
+		
+		for (int i = firstRow; i <= lastRow; i++) {
+			String content = ExcelUtils.readExcel(sheet, i + 1, colNum + 1);
+			
+			if (mergeName != null && content.equals(mergeName)) {
+				mergeRowEnd++;
+			} else {
+				if (mergeRowEnd > mergeRowBegin) {
+					this.setMerge(sheet, mergeRowBegin-1, mergeRowEnd-1, colNum, colNum, clazz);
+				}
+				mergeRowBegin = i + 1;
+				mergeRowEnd = mergeRowBegin;
+				mergeName = content;
+			}
+		}
+		
+		// 处理最后2行相等的情况
+		if (mergeRowEnd > mergeRowBegin) {
+			this.setMerge(sheet, mergeRowBegin-1, mergeRowEnd-1, colNum, colNum, clazz);
+		}
+	}
+	
+	/**
+	 * 自动合并行
+	 * @param sheet
+	 * @param rowNum      第几行（从0开始计算）
+	 * @param firstCol    起始列（从0开始计算）
+	 * @param lastCol     终止列（从0开始计算）
+	 * @param clazz
+	 */
+	@Override
+	public void setAutoMergeRow(Sheet sheet, int rowNum, int firstCol, Integer lastCol, Class<?> clazz) {
+		int mergeColBegin = 0;
+		int mergeColEnd = 0;
+		String mergeName = null; // 合并内容
+		
+		for (int j = firstCol; j <= lastCol; j++) {
+			String content = ExcelUtils.readExcel(sheet, rowNum + 1, j + 1);
+			
+			if (mergeName != null && content.equals(mergeName)) {
+				mergeColEnd++;
+			} else {
+				if (mergeColEnd > mergeColBegin) {
+					this.setMerge(sheet, rowNum, rowNum, mergeColBegin, mergeColEnd, clazz);
+				}
+				mergeColBegin = j;
+				mergeColEnd = j;
+				mergeName = content;
+			}
+		}
+		
+		// 处理最后一组内容
+		if (mergeColEnd > mergeColBegin) {
+			this.setMerge(sheet, rowNum, rowNum, mergeColBegin, mergeColEnd, clazz);
+		}
+	}
+	
+	/**
+	 * 设置合并
+	 * @param sheet
+	 * @param firstRow    起始行（从0开始计算）
+	 * @param lastRow     终止行（从0开始计算）
+	 * @param firstCol    起始列（从0开始计算）
+	 * @param lastCol     终止列（从0开始计算）
+	 * @param clazz
+	 */
+	@Override
+	public void setMerge(Sheet sheet, int firstRow, int lastRow, int firstCol, int lastCol, Class<?> clazz) {
+		CellRangeAddress cellRangeAddress = new CellRangeAddress(firstRow, lastRow, firstCol, lastCol);
+		sheet.addMergedRegion(cellRangeAddress);
+		
+		// 合并样式
+		if (clazz != null) {
+			try {
+				ICellStyle styleProvider = (ICellStyle) clazz.getDeclaredConstructor().newInstance();
+				
+				Row row = sheet.getRow(firstRow);
+				if (row != null) {
+					Cell cell = row.getCell(firstCol);
+					if (cell != null) {
+						cell.setCellStyle(styleProvider.createDataStyle(sheet.getWorkbook()));
+					}
+				}
+			} catch (Exception e) {
+				throw new RuntimeException("设置单元格合并样式失败", e);
+			}
 		}
 	}
 	

@@ -1,15 +1,27 @@
 package cn.javaex.officejj.excel.entity;
 
 /**
- * 单元格合并
+ * 单元格区域
  * 
  * @author 陈霓清
  */
-public class Merge {
+public class CellArea {
 	public Integer firstRow;     // 起始行（从0开始计算）
 	public Integer lastRow;      // 终止行（从0开始计算）
 	public Integer firstCol;     // 起始列（从0开始计算）
 	public Integer lastCol;      // 终止列（从0开始计算）
+	
+	public CellArea() {
+		super();
+	}
+	
+	public CellArea(Integer firstRow, Integer lastRow, Integer firstCol, Integer lastCol) {
+		super();
+		this.firstRow = firstRow;
+		this.lastRow = lastRow;
+		this.firstCol = firstCol;
+		this.lastCol = lastCol;
+	}
 	
 	public Integer getFirstRow() {
 		return firstRow;

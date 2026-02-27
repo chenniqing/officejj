@@ -1,30 +1,27 @@
 package cn.javaex.officejj.word;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import javax.servlet.http.HttpServletResponse;
 
 import org.apache.poi.ooxml.POIXMLDocument;
 import org.apache.poi.poifs.crypt.HashAlgorithm;
 import org.apache.poi.util.IOUtils;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
-import cn.javaex.officejj.common.util.FileHandler;
 import cn.javaex.officejj.common.util.PathHandler;
 import cn.javaex.officejj.word.help.MergeHelper;
 import cn.javaex.officejj.word.help.ParagraphHelper;
-import cn.javaex.officejj.word.help.PreviewHelper;
 import cn.javaex.officejj.word.help.TableHelper;
 import cn.javaex.officejj.word.help.WordHelper;
 
@@ -97,16 +94,6 @@ public class WordUtils {
 	}
 	
 	/**
-	 * 将word（.docx后缀）转为html
-	 * @param filePath     word文件的全路径，例如：D:\\Temp\\1.docx
-	 * @return             返回生成的html文件的全路径，例如：D:\\Temp\\1_html\\1.html
-	 * @throws Exception
-	 */
-	public static String wordToHtml(String filePath) throws Exception {
-		return new PreviewHelper().wordToHtml(filePath);
-	}
-	
-	/**
 	 * 输出Word到指定路径
 	 * @param word         word对象，支持 doc 和 docx，例如：XWPFDocument word
 	 * @param filePath     文件写到哪里的全路径，例如：D:\\1.docx
@@ -123,49 +110,49 @@ public class WordUtils {
 			out = new FileOutputStream(targetFile);
 			word.write(out);
 			out.flush();
-			word.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 		} finally {
-			IOUtils.closeQuietly(out);
+			if (out != null) {
+				try { out.close(); } catch (IOException ignore) {}
+			}
+			try { word.close(); } catch (Exception ignore) {}
 		}
 	}
 	
 	/**
-	 * 下载Word
-	 * @param word         word对象，支持 doc 和 docx，例如：XWPFDocument word
-	 * @param filename     带后缀的文件名，例如："test.docx"
-	 * @throws IOException
+	 * 下载Word（兼容 javax 和 jakarta Servlet 环境）
+	 * @param response    javax.servlet.http.HttpServletResponse 或 jakarta.servlet.http.HttpServletResponse
+	 * @param word        POIXMLDocument（如 XWPFDocument 或 HWPFDocument 等）
+	 * @param filename    带后缀的文件名，例如："test.docx"
 	 */
-	public static void download(POIXMLDocument word, String filename) throws IOException {
-		HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getResponse();
-		download(response, word, filename);
-	}
-	
-	/**
-	 * 下载Word
-	 * @param word         word对象，支持 doc 和 docx，例如：XWPFDocument word
-	 * @param filename     带后缀的文件名，例如："test.docx"
-	 * @throws IOException
-	 */
-	public static void download(HttpServletResponse response, POIXMLDocument word, String filename) throws IOException {
-		String folderPath = PathHandler.getFolderPath();
-		
-		String fileUrl = folderPath + File.separator + filename;
-		
-		FileOutputStream out = null;
+	public static void download(Object response, POIXMLDocument word, String filename) throws IOException {
+		OutputStream out = null;
 		try {
-			out = new FileOutputStream(fileUrl);
+			Method setContentType = response.getClass().getMethod("setContentType", String.class);
+			Method setHeader = response.getClass().getMethod("setHeader", String.class, String.class);
+			Method getOutputStream = response.getClass().getMethod("getOutputStream");
+			
+			setContentType.setAccessible(true);
+			setHeader.setAccessible(true);
+			getOutputStream.setAccessible(true);
+			
+			setContentType.invoke(response, "application/octet-stream; charset=utf-8");
+			String encodedFilename = java.net.URLEncoder.encode(filename, "UTF-8").replaceAll("\\+", "%20");
+			setHeader.invoke(response, "Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
+			
+			out = new BufferedOutputStream((OutputStream) getOutputStream.invoke(response));
 			word.write(out);
 			out.flush();
-			word.close();
 		} catch (Exception e) {
 			e.printStackTrace();
+			throw new IOException("Download word failed", e);
 		} finally {
-			IOUtils.closeQuietly(out);
+			if (out != null) {
+				try { out.close(); } catch (IOException ignore) {}
+			}
+			try { word.close(); } catch (Exception ignore) {}
 		}
-		
-		FileHandler.downloadFile(response, fileUrl);
 	}
 	
 	/**

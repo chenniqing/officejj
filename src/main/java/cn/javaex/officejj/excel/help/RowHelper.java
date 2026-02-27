@@ -1,8 +1,10 @@
 package cn.javaex.officejj.excel.help;
 
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 
 import cn.javaex.officejj.excel.ExcelUtils;
@@ -13,6 +15,49 @@ import cn.javaex.officejj.excel.ExcelUtils;
  * @author 陈霓清
  */
 public class RowHelper {
+
+	/**
+	 * 复制一行所有单元格（含所有样式）
+	 * @param workbook
+	 * @param src
+	 * @param tgt
+	 */
+	public void copyRow(Workbook workbook, Row src, Row tgt) {
+		if (src == null) {
+			return;
+		}
+		tgt.setHeight(src.getHeight());
+		for (int j = 0; j < src.getLastCellNum(); j++) {
+			Cell srcCell = src.getCell(j);
+			Cell tgtCell = tgt.createCell(j);
+			if (srcCell == null) {
+				continue;
+			}
+			
+			switch (srcCell.getCellType()) {
+				case STRING:
+					tgtCell.setCellValue(srcCell.getStringCellValue());
+					break;
+				case NUMERIC:
+					tgtCell.setCellValue(srcCell.getNumericCellValue());
+					break;
+				case BOOLEAN:
+					tgtCell.setCellValue(srcCell.getBooleanCellValue());
+					break;
+				case FORMULA:
+					tgtCell.setCellFormula(srcCell.getCellFormula());
+					break;
+				case ERROR:
+					tgtCell.setCellErrorValue(srcCell.getErrorCellValue());
+					break;
+				default:
+					tgtCell.setBlank();
+			}
+			CellStyle newStyle = workbook.createCellStyle();
+			newStyle.cloneStyleFrom(srcCell.getCellStyle());
+			tgtCell.setCellStyle(newStyle);
+		}
+	}
 
 	/**
 	 * 复制行及其数据

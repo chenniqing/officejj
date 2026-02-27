@@ -10,7 +10,9 @@ public class Picture {
 	private Integer height;         // 图片高度
 	private String url;             // 图片路径
 	private String description;     // 图片描述
-
+	private byte[] data;            // 图片字节内容
+	private String fileSuffix;      // 图片类型（如"png","jpg"等，方便ImageIO处理）
+	
 	public Picture() {
 		
 	}
@@ -91,6 +93,22 @@ public class Picture {
 	 */
 	public void setDescription(String description) {
 		this.description = description;
+	}
+
+	public byte[] getData() {
+		return data;
+	}
+
+	public void setData(byte[] data) {
+		this.data = data;
+	}
+
+	public String getFileSuffix() {
+		return fileSuffix;
+	}
+
+	public void setFileSuffix(String fileSuffix) {
+		this.fileSuffix = fileSuffix;
 	}
 
 }

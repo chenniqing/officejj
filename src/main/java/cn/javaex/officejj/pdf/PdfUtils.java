@@ -1,5 +1,6 @@
 package cn.javaex.officejj.pdf;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -7,10 +8,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
-
-import javax.servlet.http.HttpServletResponse;
 
 import org.apache.poi.util.IOUtils;
 
@@ -21,7 +21,6 @@ import com.itextpdf.text.pdf.PdfStamper;
 import com.itextpdf.text.pdf.PdfWriter;
 import com.itextpdf.tool.xml.XMLWorkerHelper;
 
-import cn.javaex.officejj.common.util.FileHandler;
 import cn.javaex.officejj.common.util.PathHandler;
 import cn.javaex.officejj.pdf.help.AcroFieldsHelp;
 import cn.javaex.officejj.pdf.help.FontFamilyHelper;
@@ -144,30 +143,42 @@ public class PdfUtils {
 			IOUtils.closeQuietly(out);
 		}
 	}
-	
+
 	/**
-	 * 下载Pdf
-	 * @param fileName     带后缀的文件名，例如："test.pdf"
-	 * @throws IOException
+	 * 下载Pdf（兼容 javax 和 jakarta Servlet 环境）
+	 * @param response    javax.servlet.http.HttpServletResponse 或 jakarta.servlet.http.HttpServletResponse
+	 * @param bos         PDF内容（ByteArrayOutputStream）
+	 * @param filename    带后缀的文件名，例如："test.pdf"
 	 */
-	public static void download(HttpServletResponse response, ByteArrayOutputStream bos, String fileName) throws IOException {
-		String folderPath = PathHandler.getFolderPath();
-		
-		String fileUrl = folderPath + File.separator + fileName;
-		
-		FileOutputStream out = null;
+	public static void download(Object response, ByteArrayOutputStream bos, String filename) throws IOException {
+		OutputStream out = null;
 		try {
-			out = new FileOutputStream(fileUrl);
-			out.write(bos.toByteArray()); 
+			Method setContentType = response.getClass().getMethod("setContentType", String.class);
+			Method setHeader = response.getClass().getMethod("setHeader", String.class, String.class);
+			Method getOutputStream = response.getClass().getMethod("getOutputStream");
+			
+			setContentType.setAccessible(true);
+			setHeader.setAccessible(true);
+			getOutputStream.setAccessible(true);
+			
+			setContentType.invoke(response, "application/octet-stream; charset=utf-8");
+			String encodedFilename = java.net.URLEncoder.encode(filename, "UTF-8").replaceAll("\\+", "%20");
+			setHeader.invoke(response, "Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
+			
+			out = new BufferedOutputStream((OutputStream) getOutputStream.invoke(response));
+			out.write(bos.toByteArray());
 			out.flush();
 		} catch (Exception e) {
 			e.printStackTrace();
+			throw new IOException("Download pdf failed", e);
 		} finally {
-			IOUtils.closeQuietly(bos);
-			IOUtils.closeQuietly(out);
+			if (bos != null) {
+				try { bos.close(); } catch (IOException ignore) {}
+			}
+			if (out != null) {
+				try { out.close(); } catch (IOException ignore) {}
+			}
 		}
-		
-		FileHandler.downloadFile(response, fileUrl);
 	}
 	
 	/**

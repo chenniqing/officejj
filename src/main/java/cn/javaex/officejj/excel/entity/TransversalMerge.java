@@ -5,7 +5,7 @@ package cn.javaex.officejj.excel.entity;
  * 
  * @author 陈霓清
  */
-public class TransversalMerge extends Merge {
+public class TransversalMerge extends CellArea {
 
 	public TransversalMerge() {
 		

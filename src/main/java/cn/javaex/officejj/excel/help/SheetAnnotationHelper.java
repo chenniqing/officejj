@@ -76,7 +76,7 @@ public class SheetAnnotationHelper extends SheetHelper {
 	@Override
 	public synchronized void write(Sheet sheet, Class<?> clazz, List<?> list, String title) throws Exception {
 		// 当前写到了第几行（从1开始计算）
-		int rowNum = sheet.getLastRowNum();
+		int rowNum = sheet.getLastRowNum() < 0 ? 0 : sheet.getLastRowNum();
 		Row row = sheet.getRow(0);
 		
 		// 1.0 设置基础属性

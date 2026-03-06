@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DateUtil;
@@ -83,6 +84,8 @@ public class ExcelUtils {
 	 * @throws Exception
 	 */
 	public static Workbook getExcel(InputStream in) {
+		ZipSecureFile.setMinInflateRatio(0.0);
+		
 		Workbook wb = null;
 		
 		try {
@@ -190,6 +193,8 @@ public class ExcelUtils {
 	 * @throws Exception
 	 */
 	public static <T> List<T> readExcel(InputStream in, Class<T> clazz, int sheetNum, int rowNum) throws Exception {
+		ZipSecureFile.setMinInflateRatio(0.0);
+		
 		Workbook wb = WorkbookFactory.create(in);
 		Sheet sheet = wb.getSheetAt(sheetNum-1);
 		
@@ -206,6 +211,8 @@ public class ExcelUtils {
 	 * @throws Exception
 	 */
 	public static <T> List<T> readExcel(InputStream in, Class<T> clazz, String sheetName, int rowNum) throws Exception {
+		ZipSecureFile.setMinInflateRatio(0.0);
+		
 		Workbook wb = WorkbookFactory.create(in);
 		Sheet sheet = wb.getSheet(sheetName);
 		
@@ -317,6 +324,16 @@ public class ExcelUtils {
 		}
 		
 		cell.setCellValue(content);
+	}
+	
+	/**
+	 * 替换Excel中的占位符内容
+	 * @param workbook
+	 * @param sheetNum      第几个Sheet（从1开始计算）
+	 * @param param
+	 */
+	public static void writeExcel(Workbook workbook, int sheetNum, Map<String, Object> param) {
+		writeExcel(workbook.getSheetAt(sheetNum - 1), param);
 	}
 	
 	/**

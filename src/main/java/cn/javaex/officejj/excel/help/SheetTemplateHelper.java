@@ -5,10 +5,12 @@ import java.beans.PropertyDescriptor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.PageMargin;
@@ -35,10 +37,13 @@ import cn.javaex.officejj.excel.entity.SheetPrintArea;
 public class SheetTemplateHelper extends SheetHelper {
 	
 	/**
-	 * 替换占位符
+	 * 替换占位符（相同的占位符，只处理一次）
 	 */
 	@Override
 	public void write(Sheet sheet, Map<String, Object> param) {
+		Set<String> handledListKeys = new HashSet<>();
+		Set<String> handledTextKeys = new HashSet<>();
+		
 		CellHelper cellHelper = new CellHelper();
 		
 		Map<String, List<Map<String, Integer[]>>> listMap = new LinkedHashMap<String, List<Map<String, Integer[]>>>();
@@ -83,8 +88,16 @@ public class SheetTemplateHelper extends SheetHelper {
 					listKey = arr[0];
 					String attributeKey = arr[1];
 					
+					// 如果该key已经处理过（已入listMap并执行过 setListValue），后续重复区域直接忽略
+					if (handledListKeys.contains(listKey)) {
+						continue;
+					}
+					
 					if (!"".equals(tempListKey) && !"".equals(listKey) && !tempListKey.equals(listKey)) {
+						// flush 上一个key
 						listMap.put(tempListKey, list);
+						handledListKeys.add(tempListKey); // 标记为已处理
+						
 						this.setListValue(sheet, listMap, param);
 						
 						tempListKey = "";
@@ -98,25 +111,43 @@ public class SheetTemplateHelper extends SheetHelper {
 					
 					list.add(map);
 				}
-				// 直接替换
+				// 直接替换（非list）
 				else {
-					// 占位符独占一格时，需要根据替换值的实际类型进行替换
+					// 独占一格：一定只有一个 key 时
 					if (cellValue.equals("${" + placeholders.get(0) + "}")) {
+						String key = placeholders.get(0);
+						if (handledTextKeys.contains(key)) {
+							continue;
+						}
 						cell = sheet.getRow(row.getRowNum()).getCell(i);
-						cellHelper.setValue(cell, param.get(placeholders.get(0)));
-						// 重置清空，当占位符一致时，只填充一个，以满足复制的场景
-						param.put(placeholders.get(0), PLACEHOLDER_CLEAR);
+						cellHelper.setValue(cell, param.get(key));
+						handledTextKeys.add(key); // 标记为已处理
 					}
-					// 占位符非独占一格时，认为该单元格的值是字符串，需要替换其中所有的占位符
+					// 非独占：可能有多个占位符
 					else {
+						// 只替换“尚未处理过”的占位符
+						List<String> toReplace = new ArrayList<>();
+						for (String key : placeholders) {
+							if (!handledTextKeys.contains(key)) {
+								toReplace.add(key);
+							}
+						}
+						if (toReplace.isEmpty()) {
+							continue;
+						}
+						
 						cell = sheet.getRow(row.getRowNum()).getCell(i);
-						cellHelper.setValue(cell, placeholders, param);
+						cellHelper.setValue(cell, toReplace, param);
+						
+						// 替换后把这些 key 标记为已处理
+						handledTextKeys.addAll(toReplace);
 					}
 				}
 			}
 			
-			if (!"".equals(listKey)) {
+			if (!"".equals(listKey) && !handledListKeys.contains(listKey)) {
 				listMap.put(listKey, list);
+				handledListKeys.add(listKey);
 			}
 		}
 		

@@ -20,24 +20,21 @@ import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 
-import org.apache.poi.util.IOUtils;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.ClientAnchor;
 import org.apache.poi.ss.usermodel.Drawing;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.xssf.usermodel.DefaultIndexedColorMap;
-import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.util.IOUtils;
 import org.apache.poi.xssf.usermodel.XSSFClientAnchor;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFRichTextString;
-import org.springframework.beans.BeanUtils;
 
 import cn.javaex.officejj.common.entity.Font;
 import cn.javaex.officejj.common.entity.Picture;
-import cn.javaex.officejj.common.entity.RGB;
 import cn.javaex.officejj.common.util.ImageHandler;
 import cn.javaex.officejj.excel.style.ICellStyle;
 
@@ -48,6 +45,11 @@ import cn.javaex.officejj.excel.style.ICellStyle;
  */
 public class CellHelper extends SheetHelper {
 	
+	// POI 字体缓存：同样属性只建一次
+	private final Map<String, org.apache.poi.ss.usermodel.Font> poiFontCache = new HashMap<>();
+	// 样式缓存：baseStyle + fontKey => 新样式
+	private final Map<String, CellStyle> styleCache = new HashMap<>();
+
 	/**
 	 * 自动获得它所处的合并区域
 	 * @param cell
@@ -181,7 +183,7 @@ public class CellHelper extends SheetHelper {
 	        imageStream.close();
 	 
 	        // 设定内边距（px）
-	        int paddingPx = 20;
+	        int paddingPx = 5;
 	        int paddingEMU = paddingPx * 9525;
 	 
 	        Drawing<?> patriarch = sheet.createDrawingPatriarch();
@@ -231,9 +233,7 @@ public class CellHelper extends SheetHelper {
 			cell.setCellValue((String) obj);
 		}
 		else if (obj instanceof String) {
-			if (obj.equals(PLACEHOLDER_CLEAR) == false) {
-				cell.setCellValue((String) obj);
-			}
+			cell.setCellValue((String) obj);
 		}
 		else if (obj instanceof Integer) {
 			cell.setCellValue(Integer.parseInt(obj.toString()));
@@ -266,12 +266,12 @@ public class CellHelper extends SheetHelper {
 		else if (obj instanceof Font) {
 			Font font = (Font) obj;
 			
-			XSSFCellStyle cellStyle = (XSSFCellStyle) cell.getSheet().getWorkbook().createCellStyle();
-			BeanUtils.copyProperties((XSSFCellStyle) cell.getCellStyle(), cellStyle);
-			cellStyle.setFont(setXSSFFont(cell, font));
+			Workbook wb = cell.getSheet().getWorkbook();
+			CellStyle base = cell.getCellStyle();
+			CellStyle cached = getOrCreateStyleWithFont(wb, base, font);
 			
 			cell.setCellValue(font.getText());
-			cell.setCellStyle(cellStyle);
+			cell.setCellStyle(cached);
 		}
 		// 自定义图片
 		else if (obj instanceof Picture) {
@@ -290,6 +290,75 @@ public class CellHelper extends SheetHelper {
 		else {
 			cell.setCellValue(obj.toString());
 		}
+	}
+	
+	/**
+	 * 自定义字体缓存key
+	 * @param f
+	 * @return
+	 */
+	private String fontKey(Font f) {
+	    return (f.getColor() == null ? "" : f.getColor().trim().toUpperCase()) + "|" +
+	           (f.getFontFamily() == null ? "" : f.getFontFamily().trim()) + "|" +
+	           (f.getFontSize() == null ? "" : f.getFontSize()) + "|" +
+	           f.getBold() + "|" + f.getItalic() + "|" + f.getStrike();
+	}
+
+	/**
+	 * 得到Poi字体
+	 * @param wb
+	 * @param f
+	 * @return
+	 */
+	private org.apache.poi.ss.usermodel.Font getOrCreatePoiFont(Workbook wb, Font f) {
+	    String key = fontKey(f);
+	    return poiFontCache.computeIfAbsent(key, k -> {
+	        XSSFFont pf = (XSSFFont) wb.createFont();
+	        if (f.getFontFamily() != null) pf.setFontName(f.getFontFamily());
+	        if (f.getFontSize() != null) pf.setFontHeightInPoints(f.getFontSize().shortValue());
+	        pf.setBold(f.getBold());
+	        pf.setItalic(f.getItalic());
+	        pf.setStrikeout(f.getStrike());
+	
+	        if (f.getColor() != null && f.getColor().length() > 0) {
+	            byte[] rgb = hexToRgb(f.getColor());
+	            pf.setColor(new XSSFColor(rgb, null));
+	        }
+	        return pf;
+	    });
+	}
+
+	/**
+	 * 字体样式
+	 * @param wb
+	 * @param baseStyle
+	 * @param f
+	 * @return
+	 */
+	private CellStyle getOrCreateStyleWithFont(Workbook wb, CellStyle baseStyle, Font f) {
+	    String key = System.identityHashCode(baseStyle) + "||" + fontKey(f);
+	    return styleCache.computeIfAbsent(key, k -> {
+	        CellStyle ns = wb.createCellStyle();
+	        ns.cloneStyleFrom(baseStyle);
+	        ns.setFont(getOrCreatePoiFont(wb, f));
+	        return ns;
+	    });
+	}
+	
+	/**
+	 * 颜色转换
+	 * @param hex
+	 * @return
+	 */
+	private static byte[] hexToRgb(String hex) {
+	    String s = hex.trim();
+	    if (s.startsWith("#")) s = s.substring(1);
+	    if (s.length() != 6) throw new IllegalArgumentException("color must be RRGGBB, but: " + hex);
+	    return new byte[] {
+	        (byte) Integer.parseInt(s.substring(0, 2), 16),
+	        (byte) Integer.parseInt(s.substring(2, 4), 16),
+	        (byte) Integer.parseInt(s.substring(4, 6), 16)
+	    };
 	}
 
 	/**
@@ -328,41 +397,34 @@ public class CellHelper extends SheetHelper {
 		} else {
 			// 为指定的文本设置字体样式
 			XSSFRichTextString richString = new XSSFRichTextString(cellValue);
+			Workbook wb = cell.getSheet().getWorkbook();
 			
 			for (Map.Entry<String, Font> entry : map.entrySet()) {
 				String key = entry.getKey();
-				XSSFFont fontSetting = setXSSFFont(cell, entry.getValue());
-				richString.applyFont(cellValue.indexOf(key), cellValue.indexOf(key) + key.length(), fontSetting);
+		        if (key == null || key.isEmpty()) {
+		        	continue;
+		        }
+		
+		        XSSFFont poiFont = (XSSFFont) getOrCreatePoiFont(wb, entry.getValue());
+		
+		        int from = 0;
+		        while (from < cellValue.length()) {
+		            int start = cellValue.indexOf(key, from);
+		            if (start < 0) {
+		                break;
+		            }
+		            int end = start + key.length();
+		            richString.applyFont(start, end, poiFont);
+		     
+		            // 推进搜索起点，确保不会重复命中同一位置
+		            from = end;
+		        }
 			}
 			
 			cell.setCellValue(richString);
 		}
 	}
 	
-	/**
-	 * 设置字体样式
-	 * @param cell
-	 * @param font
-	 * @return
-	 */
-	private XSSFFont setXSSFFont(Cell cell, Font font) {
-		XSSFFont fontSetting = (XSSFFont) cell.getSheet().getWorkbook().createFont();
-		fontSetting.setFontName(font.getFontFamily());
-		fontSetting.setBold(font.getBold());
-		fontSetting.setItalic(font.getItalic());
-		fontSetting.setStrikeout(font.getStrike());
-		if (font.getFontSize()!=null) {
-			fontSetting.setFontHeightInPoints((short) font.getFontSize().intValue());
-		}
-		if (font.getColor()!=null) {
-			RGB rgb = new RGB(font.getColor());
-			XSSFColor color = new XSSFColor(new java.awt.Color(rgb.getRed(), rgb.getGreen(), rgb.getBlue()), new DefaultIndexedColorMap());
-			fontSetting.setColor(color);
-		}
-		
-		return fontSetting;
-	}
-
 	/**
 	 * 设置单元格样式
 	 * @param cell
@@ -375,7 +437,7 @@ public class CellHelper extends SheetHelper {
 			ICellStyle styleProvider = (ICellStyle) clazz.getDeclaredConstructor().newInstance();
 			cell.setCellStyle(styleProvider.createDataStyle(sheet.getWorkbook()));
 		} catch (Exception e) {
-			throw new RuntimeException("设置单元格样式失败", e);
+			throw new RuntimeException("Failed to set cell style", e);
 		}
 	}
 

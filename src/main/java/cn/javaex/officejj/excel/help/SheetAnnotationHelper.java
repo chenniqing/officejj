@@ -548,11 +548,14 @@ public class SheetAnnotationHelper extends SheetHelper {
 				cell = row.createCell(sort);
 				Object obj = field.get(entity);
 				
-				if ("image".equals(excelCell.type())) {
+				if (excelCell.type().contains("image")) {
 					if (obj==null) {
 						cell.setCellValue("");
 					} else {
-						cellHelper.setImage(cell, (String) obj, null, null);
+						String[] split = excelCell.type().split(",");
+						Integer picWidth = "0".equals(split[1].trim()) ? null : Integer.valueOf(split[1].trim());
+						Integer picHeight = "0".equals(split[2].trim()) ? null : Integer.valueOf(split[2].trim());
+						cellHelper.setImage(cell, (String) obj, picWidth, picHeight);
 					}
 				} else {
 					if (obj==null) {

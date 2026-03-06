@@ -2,6 +2,7 @@ package cn.javaex.officejj.excel.help;
 
 import java.util.UUID;
 
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -21,6 +22,8 @@ public class WorkbookHelpler {
 	 * @return
 	 */
 	public Workbook createWorkbook(int size) {
+		ZipSecureFile.setMinInflateRatio(0.0);
+		
 		if (size >= MAX_SIZE) {
 			return new SXSSFWorkbook(1000);
 		}

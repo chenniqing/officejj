@@ -47,8 +47,6 @@ public class SheetHelper {
 	public static final int BASE_ROW_HEIGHT = 20;
 	/** 列宽基数 */
 	public static final int BASE_COLUMN_WIDTH = 256;
-	/** 重置清空，当占位符一致时，只填充一个，以满足复制的场景 */
-	public static final String PLACEHOLDER_CLEAR = "==PLACEHOLDER_CLEAR==";
 	
 	// 存储值替换
 	public Map<String, Object> replaceMap = new HashMap<String, Object>();

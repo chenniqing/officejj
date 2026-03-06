@@ -1,7 +1,6 @@
 package cn.javaex.officejj.excel.help;
 
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -53,9 +52,8 @@ public class RowHelper {
 				default:
 					tgtCell.setBlank();
 			}
-			CellStyle newStyle = workbook.createCellStyle();
-			newStyle.cloneStyleFrom(srcCell.getCellStyle());
-			tgtCell.setCellStyle(newStyle);
+			
+			tgtCell.setCellStyle(srcCell.getCellStyle());
 		}
 	}
 

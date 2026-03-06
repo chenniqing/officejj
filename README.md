@@ -11,7 +11,7 @@
 <dependency>
 	<groupId>cn.javaex</groupId>
 	<artifactId>officejj</artifactId>
-	<version>5.0.0</version>
+	<version>5.1.2</version>
 </dependency>
 ```
 

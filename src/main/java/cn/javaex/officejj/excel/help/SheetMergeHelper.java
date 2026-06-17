@@ -1,5 +1,8 @@
 package cn.javaex.officejj.excel.help;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -180,30 +183,67 @@ public class SheetMergeHelper extends SheetHelper {
 	 */
 	@Override
 	public void setAutoMergeCol(Sheet sheet, int colNum, int firstRow, int lastRow, Class<?> clazz) {
-		// 合并定义
-		int mergeRowBegin = 0;
-		int mergeRowEnd = 0;
-		String mergeName = null;    // 合并内容
-		
-		for (int i = firstRow; i <= lastRow; i++) {
-			String content = ExcelUtils.readExcel(sheet, i + 1, colNum + 1);
-			
-			if (mergeName != null && content.equals(mergeName)) {
-				mergeRowEnd++;
-			} else {
-				if (mergeRowEnd > mergeRowBegin) {
-					this.setMerge(sheet, mergeRowBegin-1, mergeRowEnd-1, colNum, colNum, clazz);
-				}
-				mergeRowBegin = i + 1;
-				mergeRowEnd = mergeRowBegin;
-				mergeName = content;
+		this.setAutoMergeCol(sheet, colNum, firstRow, lastRow, clazz, new int[0]);
+	}
+
+	/**
+	 * 自动合并列，并用指定依赖列作为合并边界。
+	 * 例如第2列班主任按第1列班级拆分合并时，mergeByColNumArr 传入 0。
+	 *
+	 * @param sheet
+	 * @param colNum      第几列（从0开始计算）
+	 * @param firstRow    起始行（从0开始计算）
+	 * @param lastRow     终止行（从0开始计算）
+	 * @param clazz
+	 * @param mergeByColNumArr 依赖列（从0开始计算），当前列值和依赖列值都相同才合并
+	 */
+	@Override
+	public void setAutoMergeCol(Sheet sheet, int colNum, int firstRow, int lastRow, Class<?> clazz, int... mergeByColNumArr) {
+		if (sheet==null || firstRow>=lastRow) {
+			return;
+		}
+
+		int mergeRowBegin = firstRow;
+		List<String> mergeKey = this.getMergeKey(sheet, firstRow, colNum, mergeByColNumArr);
+
+		for (int i=firstRow+1; i<=lastRow; i++) {
+			List<String> currentKey = this.getMergeKey(sheet, i, colNum, mergeByColNumArr);
+			if (mergeKey.equals(currentKey)) {
+				continue;
+			}
+
+			if (i-1>mergeRowBegin) {
+				this.setMerge(sheet, mergeRowBegin, i-1, colNum, colNum, clazz);
+			}
+			mergeRowBegin = i;
+			mergeKey = currentKey;
+		}
+
+		// 处理最后一组内容，只有跨越两行以上才需要真正合并。
+		if (lastRow>mergeRowBegin) {
+			this.setMerge(sheet, mergeRowBegin, lastRow, colNum, colNum, clazz);
+		}
+	}
+
+	/**
+	 * 生成合并判断键：当前列值 + 依赖列值。
+	 * 使用列表比较可以避免简单字符串拼接导致的边界歧义。
+	 * @param sheet
+	 * @param rowIndex
+	 * @param colNum
+	 * @param mergeByColNumArr
+	 * @return
+	 */
+	private List<String> getMergeKey(Sheet sheet, int rowIndex, int colNum, int... mergeByColNumArr) {
+		List<String> list = new ArrayList<String>();
+		list.add(ExcelUtils.readExcel(sheet, rowIndex + 1, colNum + 1));
+		if (mergeByColNumArr!=null) {
+			for (int mergeByColNum : mergeByColNumArr) {
+				list.add(ExcelUtils.readExcel(sheet, rowIndex + 1, mergeByColNum + 1));
 			}
 		}
-		
-		// 处理最后2行相等的情况
-		if (mergeRowEnd > mergeRowBegin) {
-			this.setMerge(sheet, mergeRowBegin-1, mergeRowEnd-1, colNum, colNum, clazz);
-		}
+
+		return list;
 	}
 	
 	/**

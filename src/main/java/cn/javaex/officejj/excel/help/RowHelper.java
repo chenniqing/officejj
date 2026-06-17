@@ -10,7 +10,7 @@ import cn.javaex.officejj.excel.ExcelUtils;
 
 /**
  * 行
- * 
+ *
  * @author 陈霓清
  */
 public class RowHelper {
@@ -32,7 +32,7 @@ public class RowHelper {
 			if (srcCell == null) {
 				continue;
 			}
-			
+
 			switch (srcCell.getCellType()) {
 				case STRING:
 					tgtCell.setCellValue(srcCell.getStringCellValue());
@@ -52,39 +52,47 @@ public class RowHelper {
 				default:
 					tgtCell.setBlank();
 			}
-			
+
 			tgtCell.setCellStyle(srcCell.getCellStyle());
 		}
 	}
 
 	/**
 	 * 复制行及其数据
-	 * 
+	 *
 	 * @param sheet
 	 * @param oldRow
 	 * @param newRow
 	 */
 	public void copyRow(Sheet sheet, Row oldRow, Row newRow) {
+		if (oldRow==null || newRow==null) {
+			return;
+		}
 		// 复制行高
 		if (oldRow.getHeight()>=0) {
 			newRow.setHeight(oldRow.getHeight());
 		}
-		
+
 		// 循环复制单元格
-		for (int i=oldRow.getFirstCellNum(); i<oldRow.getLastCellNum(); i++) {
+		int firstCellNum = oldRow.getFirstCellNum();
+		int lastCellNum = oldRow.getLastCellNum();
+		if (firstCellNum<0 || lastCellNum<0) {
+			return;
+		}
+		for (int i=firstCellNum; i<lastCellNum; i++) {
 			Cell oldCell = oldRow.getCell(i);
 			Cell newCell = newRow.getCell(i);
-			
+
 			if (oldCell!=null) {
 				if (newCell==null) {
 					newCell = newRow.createCell(i);
 				}
-				
+
 				// 复制单元格和样式
 				this.copyCell(oldCell, newCell);
 			}
 		}
-		
+
 		// 复制合并单元格的样式
 		for (int i=0; i<sheet.getNumMergedRegions(); i++) {
 			CellRangeAddress cellRangeAddress = sheet.getMergedRegion(i);
@@ -109,7 +117,7 @@ public class RowHelper {
 	private void copyCell(Cell oldCell, Cell newCell) {
 		// 复制样式
 		newCell.setCellStyle(oldCell.getCellStyle());
-		
+
 		// 复制值
 		newCell.setCellValue(ExcelUtils.getCellValue(oldCell));
 	}

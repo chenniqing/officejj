@@ -1,5 +1,6 @@
 package cn.javaex.officejj.pdf.help;
 
+import java.io.File;
 import java.io.FileOutputStream;
 
 import com.itextpdf.text.BaseColor;
@@ -15,7 +16,7 @@ import cn.javaex.officejj.common.entity.Font;
 
 /**
  * Pdf
- * 
+ *
  * @author 陈霓清
  */
 public class PdfHelper extends Helper {
@@ -27,66 +28,87 @@ public class PdfHelper extends Helper {
 	 * @param destPath
 	 */
 	public void setWatermark(PdfReader reader, Object obj, String destPath) throws Exception {
-		PdfStamper stamper = new PdfStamper(reader, new FileOutputStream(destPath));
-		int total = reader.getNumberOfPages() + 1;
-		
-		// 获取页面宽高
-		Document document = new Document(reader.getPageSize(1)); 
-		float width = document.getPageSize().getWidth();
-		float height = document.getPageSize().getHeight();
-		
-		PdfContentByte content;
-		
-		// 设置字体
-		BaseFont baseFont = null;
-		if (obj instanceof Font) {
-			Font font = (Font) obj;
-			String path = super.getRealPath(font.getFontFamily());
-			baseFont = BaseFont.createFont(path, BaseFont.IDENTITY_H, BaseFont.NOT_EMBEDDED);
-			
-			// 循环对每页插入水印
-			for (int i = 1; i < total; i++) {
-				// 水印的起始
-				content = stamper.getUnderContent(i);
-				// 开始
-				content.beginText();
-				content.setColorFill(BaseColor.GRAY);
-				// 设置字体及字号
-				content.setFontAndSize(baseFont, 38);
-				if (font.getFontSize()!=null) {
-					content.setFontAndSize(baseFont, font.getFontSize());
+		File targetFile = new File(destPath);
+		File parentFile = targetFile.getParentFile();
+		if (parentFile!=null && !parentFile.exists()) {
+			parentFile.mkdirs();
+		}
+
+		FileOutputStream out = null;
+		PdfStamper stamper = null;
+		try {
+			out = new FileOutputStream(targetFile);
+			stamper = new PdfStamper(reader, out);
+			int total = reader.getNumberOfPages() + 1;
+
+			// 获取页面宽高
+			Document document = new Document(reader.getPageSize(1));
+			float width = document.getPageSize().getWidth();
+			float height = document.getPageSize().getHeight();
+
+			PdfContentByte content;
+
+			// 设置字体
+			BaseFont baseFont = null;
+			if (obj instanceof Font) {
+				Font font = (Font) obj;
+				String path = super.getRealPath(font.getFontFamily());
+				baseFont = BaseFont.createFont(path, BaseFont.IDENTITY_H, BaseFont.NOT_EMBEDDED);
+
+				// 循环对每页插入水印
+				for (int i = 1; i < total; i++) {
+					// 水印的起始
+					content = stamper.getUnderContent(i);
+					// 开始
+					content.beginText();
+					content.setColorFill(BaseColor.GRAY);
+					// 设置字体及字号
+					content.setFontAndSize(baseFont, 38);
+					if (font.getFontSize()!=null) {
+						content.setFontAndSize(baseFont, font.getFontSize());
+					}
+					// 设置透明度
+					PdfGState pdfGState = new PdfGState();
+					pdfGState.setFillOpacity(0.3f);
+					content.setGState(pdfGState);
+					// 开始写入水印
+					content.showTextAligned(Element.ALIGN_LEFT, font.getText(), width/3, height/3, 40);
+					content.endText();
 				}
-				// 设置透明度
-				PdfGState pdfGState = new PdfGState();
-				pdfGState.setFillOpacity(0.3f);
-				content.setGState(pdfGState);
-				// 开始写入水印
-				content.showTextAligned(Element.ALIGN_LEFT, font.getText(), width/3, height/3, 40);
-				content.endText();
+			} else {
+				baseFont = BaseFont.createFont();
+
+				// 循环对每页插入水印
+				for (int i = 1; i < total; i++) {
+					// 水印的起始
+					content = stamper.getUnderContent(i);
+					// 开始
+					content.beginText();
+					content.setColorFill(BaseColor.GRAY);
+					// 设置字体及字号
+					content.setFontAndSize(baseFont, 38);
+					// 设置透明度
+					PdfGState pdfGState = new PdfGState();
+					pdfGState.setFillOpacity(0.3f);
+					content.setGState(pdfGState);
+					// 开始写入水印
+					content.showTextAligned(Element.ALIGN_LEFT, String.valueOf(obj), width/3, height/3, 40);
+					content.endText();
+				}
 			}
-		} else {
-			baseFont = BaseFont.createFont();
-			
-			// 循环对每页插入水印
-			for (int i = 1; i < total; i++) {
-				// 水印的起始
-				content = stamper.getUnderContent(i);
-				// 开始
-				content.beginText();
-				content.setColorFill(BaseColor.GRAY);
-				// 设置字体及字号
-				content.setFontAndSize(baseFont, 38);
-				// 设置透明度
-				PdfGState pdfGState = new PdfGState();
-				pdfGState.setFillOpacity(0.3f);
-				content.setGState(pdfGState);
-				// 开始写入水印
-				content.showTextAligned(Element.ALIGN_LEFT, (String) obj, width/3, height/3, 40);
-				content.endText();
+			stamper.close();
+			stamper = null;
+		} finally {
+			if (stamper!=null) {
+				try { stamper.close(); } catch (Exception ignore) {}
+			}
+			if (out!=null) {
+				try { out.close(); } catch (Exception ignore) {}
+			}
+			if (reader!=null) {
+				reader.close();
 			}
 		}
-		
-		stamper.close();
 	}
 
 }

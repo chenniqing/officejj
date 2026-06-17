@@ -5,6 +5,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import cn.javaex.officejj.excel.function.DefaultExcelValueConverter;
+import cn.javaex.officejj.excel.function.ExcelValueConverter;
+
 /**
  * Excel单元格
  * 
@@ -69,6 +72,30 @@ public @interface ExcelCell {
 	 * @return
 	 */
 	public String separator() default " / ";
+
+	/**
+	 * 是否纵向自动合并相邻相同值。
+	 *     适用于导出明细列表时，把连续相同的班级、部门等父级字段自动合并成一个单元格。
+	 * @return
+	 */
+	public boolean mergeRow() default false;
+
+	/**
+	 * 纵向合并的依赖列（从1开始计算）。
+	 *     当前列只有在自身值相同，并且依赖列值也相同时才会继续合并。
+	 *     例如班主任列 mergeBy={1}，表示同一个班主任跨多个班级时，会按第1列班级边界拆开合并。
+	 * @return
+	 */
+	public int[] mergeBy() default {};
+
+	/**
+	 * 导入/导出字段转换器。
+	 *     适用于字典、枚举、复杂日期、业务编码等内置类型转换无法覆盖的场景。
+	 *     导入时实现 convert，导出时实现 convertToExcel；未覆盖导出方法时保持原字段值写出。
+	 *     转换器抛出异常时，导入流程会收集为当前行错误，导出流程会直接向上抛出便于调用方定位。
+	 * @return
+	 */
+	public Class<? extends ExcelValueConverter> converter() default DefaultExcelValueConverter.class;
 	
 	/**
 	 * 默认值

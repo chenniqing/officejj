@@ -1,6 +1,11 @@
 package cn.javaex.officejj.word.help;
 
+import java.io.IOException;
 import java.math.BigInteger;
+
+import javax.xml.namespace.QName;
+
+import com.microsoft.schemas.vml.CTShape;
 
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
@@ -9,9 +14,11 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFHeader;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.xmlbeans.XmlObject;
 import org.apache.xmlbeans.impl.xb.xmlschema.SpaceAttribute;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTFldChar;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTP;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTR;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTabStop;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTText;
@@ -27,6 +34,13 @@ import cn.javaex.officejj.common.entity.Picture;
  * @author 陈霓清
  */
 public class WordHelper extends Helper {
+
+	private static final QName VML_SHAPE = new QName("urn:schemas-microsoft-com:vml", "shape");
+	private static final STHdrFtr.Enum[] WATERMARK_HEADER_TYPES = new STHdrFtr.Enum[] {
+			XWPFHeaderFooterPolicy.DEFAULT,
+			XWPFHeaderFooterPolicy.FIRST,
+			XWPFHeaderFooterPolicy.EVEN
+	};
 	
 	/**
 	 * 创建段落数组
@@ -106,22 +120,131 @@ public class WordHelper extends Helper {
 	public void setWatermark(XWPFDocument word, String content) {
 		// 创建 header-footer
 		XWPFHeaderFooterPolicy headerFooterPolicy = this.createHeaderFooter(word, content);
-		
-		// 获取默认标题，但此代码不会更新其他头
-		XWPFHeader header = headerFooterPolicy.getHeader(XWPFHeaderFooterPolicy.DEFAULT);
-		XWPFParagraph paragraph = header.getParagraphArray(0);
-		
-		// 获取设置填充颜色和旋转的com.microsoft.schemas.vml.CTShape
-		org.apache.xmlbeans.XmlObject[] xmlobjects = paragraph.getCTP()
-				.getRArray(0)
-				.getPictArray(0)
-				.selectChildren(new javax.xml.namespace.QName("urn:schemas-microsoft-com:vml", "shape"));
-		
-		if (xmlobjects.length>0) {
-			com.microsoft.schemas.vml.CTShape ctshape = (com.microsoft.schemas.vml.CTShape)xmlobjects[0];
-			ctshape.setFillcolor("#EEEEEE");
-			ctshape.setStyle(ctshape.getStyle() + ";rotation:315");
+		this.ensureWatermarkParagraphs(headerFooterPolicy, content);
+		this.applyWatermarkStyle(headerFooterPolicy);
+	}
+
+	/**
+	 * 补齐已有页眉中的水印段落。
+	 * <p>POI 的 createWatermark 遇到已存在的页眉会直接复用，不会把水印段落追加进去。</p>
+	 * @param headerFooterPolicy 页眉页脚策略
+	 * @param content 水印文字内容
+	 */
+	private void ensureWatermarkParagraphs(XWPFHeaderFooterPolicy headerFooterPolicy, String content) {
+		XWPFDocument sourceWord = null;
+		try {
+			XWPFHeaderFooterPolicy sourcePolicy = null;
+			for (STHdrFtr.Enum type : WATERMARK_HEADER_TYPES) {
+				XWPFHeader targetHeader = headerFooterPolicy.getHeader(type);
+				if (targetHeader!=null && !this.hasWatermarkShape(targetHeader)) {
+					if (sourcePolicy==null) {
+						sourceWord = new XWPFDocument();
+						sourcePolicy = sourceWord.createHeaderFooterPolicy();
+						sourcePolicy.createWatermark(content);
+					}
+					this.copyWatermarkParagraph(sourcePolicy.getHeader(type), targetHeader);
+				}
+			}
+		} finally {
+			if (sourceWord!=null) {
+				try {
+					sourceWord.close();
+				} catch (IOException e) {
+					throw new IllegalStateException("关闭临时水印文档失败", e);
+				}
+			}
 		}
+	}
+
+	/**
+	 * 复制水印段落到目标页眉。
+	 * @param sourceHeader 源页眉
+	 * @param targetHeader 目标页眉
+	 */
+	private void copyWatermarkParagraph(XWPFHeader sourceHeader, XWPFHeader targetHeader) {
+		if (sourceHeader==null || sourceHeader.getParagraphArray(0)==null) {
+			return;
+		}
+		XWPFParagraph paragraph = targetHeader.createParagraph();
+		paragraph.getCTP().set(sourceHeader.getParagraphArray(0).getCTP().copy());
+	}
+
+	/**
+	 * 设置水印样式。
+	 * <p>文档可能已经存在普通页眉，水印形状不一定在默认页眉的第一个 run 中，需要遍历所有页眉中的 VML 图形。</p>
+	 * @param headerFooterPolicy 页眉页脚策略
+	 */
+	private void applyWatermarkStyle(XWPFHeaderFooterPolicy headerFooterPolicy) {
+		for (STHdrFtr.Enum type : WATERMARK_HEADER_TYPES) {
+			XWPFHeader header = headerFooterPolicy.getHeader(type);
+			if (header!=null) {
+				this.applyWatermarkStyle(header);
+			}
+		}
+	}
+
+	/**
+	 * 设置页眉内水印样式。
+	 * @param header 页眉
+	 */
+	private void applyWatermarkStyle(XWPFHeader header) {
+		for (XWPFParagraph paragraph : header.getParagraphs()) {
+			for (int i = 0; i < paragraph.getCTP().sizeOfRArray(); i++) {
+				CTR ctr = paragraph.getCTP().getRArray(i);
+				for (int j = 0; j < ctr.sizeOfPictArray(); j++) {
+					XmlObject[] xmlobjects = ctr.getPictArray(j).selectChildren(VML_SHAPE);
+					this.applyWatermarkShapeStyle(xmlobjects);
+				}
+			}
+		}
+	}
+
+	/**
+	 * 设置水印形状样式。
+	 * @param xmlobjects VML shape 节点集合
+	 */
+	private void applyWatermarkShapeStyle(XmlObject[] xmlobjects) {
+		for (XmlObject xmlobject : xmlobjects) {
+			CTShape ctshape = (CTShape)xmlobject;
+			if (!this.isWatermarkShape(ctshape)) {
+				continue;
+			}
+			ctshape.setFillcolor("#EEEEEE");
+			if (ctshape.getStyle()==null || !ctshape.getStyle().contains("rotation:315")) {
+				ctshape.setStyle((ctshape.getStyle()==null ? "" : ctshape.getStyle()) + ";rotation:315");
+			}
+		}
+	}
+
+	/**
+	 * 判断页眉中是否已经存在水印形状。
+	 * @param header 页眉
+	 * @return true 表示已存在水印
+	 */
+	private boolean hasWatermarkShape(XWPFHeader header) {
+		for (XWPFParagraph paragraph : header.getParagraphs()) {
+			for (int i = 0; i < paragraph.getCTP().sizeOfRArray(); i++) {
+				CTR ctr = paragraph.getCTP().getRArray(i);
+				for (int j = 0; j < ctr.sizeOfPictArray(); j++) {
+					XmlObject[] xmlobjects = ctr.getPictArray(j).selectChildren(VML_SHAPE);
+					for (XmlObject xmlobject : xmlobjects) {
+						if (this.isWatermarkShape((CTShape)xmlobject)) {
+							return true;
+						}
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * 判断 VML shape 是否为 POI 生成的水印形状。
+	 * @param ctshape VML shape
+	 * @return true 表示水印形状
+	 */
+	private boolean isWatermarkShape(CTShape ctshape) {
+		return ctshape.getId()!=null && ctshape.getId().startsWith("PowerPlusWaterMarkObject");
 	}
 
 	/**

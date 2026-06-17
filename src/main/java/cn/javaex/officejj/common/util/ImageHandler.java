@@ -9,11 +9,11 @@ import java.net.URLEncoder;
 
 /**
  * 图片处理工具类
- * 
+ *
  * @author 陈霓清
  */
 public class ImageHandler {
-	
+
 	/**
 	 * 下载图片并转为流
 	 * @param imageUrl
@@ -21,24 +21,28 @@ public class ImageHandler {
 	 * @throws Exception
 	 */
 	public static InputStream downloadImageAsStream(String imageUrl) throws Exception {
+		if (imageUrl==null || imageUrl.length()==0) {
+			throw new IllegalArgumentException("图片地址不能为空");
+		}
+
 		String encodedUrl = imageUrl;
 		if (!imageUrl.contains("?")) {
 			// 将空格等特殊字符转换为URL编码，但保留http/https和主机部分
 	        int pathIndex = imageUrl.indexOf("/", imageUrl.indexOf("//") + 2);
-	        String domain = imageUrl.substring(0, pathIndex);
-	        String path = imageUrl.substring(pathIndex);
-	        String encodedPath = encodeUrlPath(path);
-	 
+	        String domain = pathIndex<0 ? imageUrl : imageUrl.substring(0, pathIndex);
+	        String path = pathIndex<0 ? "" : imageUrl.substring(pathIndex);
+	        String encodedPath = path.length()==0 ? "" : encodeUrlPath(path);
+
 	        encodedUrl = domain + encodedPath;
 		}
- 
+
         URL url = new URL(encodedUrl);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
         conn.setConnectTimeout(5000);
         conn.setReadTimeout(5000);
         conn.connect();
- 
+
         int responseCode = conn.getResponseCode();
         if (responseCode == HttpURLConnection.HTTP_OK) {
             return conn.getInputStream();
@@ -46,7 +50,7 @@ public class ImageHandler {
             throw new RuntimeException("图片下载失败，HTTP响应码: " + responseCode);
         }
     }
- 
+
     /**
      * 单独编码路径部分，避免整个URL都被编码。
      * @param path
@@ -72,12 +76,15 @@ public class ImageHandler {
 
 	/**
 	 * 获取图片流
-	 * 
+	 *
 	 * @param path
 	 * @return
 	 */
 	public static InputStream getImageStream(String path) {
 		try {
+			if (path==null || path.length()==0) {
+				throw new IllegalArgumentException("图片路径不能为空");
+			}
 			if (path.startsWith("http")) {
 				return downloadImageAsStream(path);
 			}
@@ -92,10 +99,8 @@ public class ImageHandler {
 				return new FileInputStream(fileAbsolutePath);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			throw new RuntimeException("读取图片失败：" + path, e);
 		}
-		
-		return null;
 	}
-	
+
 }

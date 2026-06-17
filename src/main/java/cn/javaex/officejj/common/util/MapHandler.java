@@ -4,11 +4,11 @@ import java.util.Map;
 
 /**
  * Map工具类
- * 
+ *
  * @author 陈霓清
  */
 public class MapHandler {
-	
+
 	/**
 	 * 获取map中第一个数据值
 	 * @param <K>
@@ -17,16 +17,20 @@ public class MapHandler {
 	 * @return
 	 */
 	public static <K, V> V getFirstOrNull(Map<K, V> map) {
+		if (map==null || map.isEmpty()) {
+			return null;
+		}
+
 		V obj = null;
-		
+
 		for (Map.Entry<K, V> entry : map.entrySet()) {
 			obj = entry.getValue();
 			if (obj!=null) {
 				break;
 			}
 		}
-		
+
 		return obj;
 	}
-	
+
 }

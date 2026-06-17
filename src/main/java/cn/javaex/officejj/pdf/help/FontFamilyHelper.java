@@ -11,16 +11,16 @@ import cn.javaex.officejj.common.util.PathHandler;
 
 /**
  * 自定义字体
- * 
+ *
  * @author 陈霓清
  */
 public class FontFamilyHelper extends XMLWorkerFontProvider {
 	private String fontFamily;
-	
+
 	public FontFamilyHelper(String fontFamily) {
 		this.fontFamily = fontFamily;
 	}
-	
+
 	public String getFontFamily() {
 		return fontFamily;
 	}
@@ -32,39 +32,45 @@ public class FontFamilyHelper extends XMLWorkerFontProvider {
 	@Override
 	public Font getFont(final String fontname, String encoding, float size, final int style) {
 		try {
+			if (this.fontFamily==null || this.fontFamily.length()==0) {
+				return super.getFont(fontname, encoding, size, style);
+			}
 			String path = this.fontFamily;
-			
+
 			// resources文件夹下的字体
 			if (path.startsWith("resources:")) {
 				path = path.replace("resources:", "");
 				if (path.startsWith("/")) {
 					path = path.substring(1);
 				}
-				
+
 				URL fontPath = Thread.currentThread().getContextClassLoader().getResource(path);
+				if (fontPath==null) {
+					return super.getFont(fontname, encoding, size, style);
+				}
 				path = fontPath + "";
 				if (path.endsWith(".ttc")) {
 					path = path + ",1";
 				}
 			} else {
 				boolean absolutePath = PathHandler.isAbsolutePath(path);
-				
+
 				if (!absolutePath) {
 					String projectPath = PathHandler.getProjectPath();
 					path = projectPath + File.separator + path;
 				}
 			}
-			
+
 			if (path.endsWith(".ttc")) {
 				path = path + ",1";
 			}
-			
+
 			BaseFont bfChinese = BaseFont.createFont(path, BaseFont.IDENTITY_H, BaseFont.NOT_EMBEDDED);
 			return new Font(bfChinese, size, style);
 		} catch (Exception e) {
-			
+
 		}
-		
+
 		return super.getFont(fontname, encoding, size, style);
 	}
 }

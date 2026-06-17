@@ -113,7 +113,7 @@
 <dependency>
     <groupId>cn.javaex</groupId>
     <artifactId>officejj</artifactId>
-    <version>5.1.2</version>
+    <version>6.0.0</version>
 </dependency>
 ```
 
@@ -121,6 +121,7 @@
 
 - 文档地址：`https://doc.javaex.cn/officejj`
 - 官网：`https://www.javaex.cn`
+- Excel 异步导入：见 [EXCEL_ASYNC_IMPORT.md](EXCEL_ASYNC_IMPORT.md)
 
 ### 3）从一个最小需求开始试
 

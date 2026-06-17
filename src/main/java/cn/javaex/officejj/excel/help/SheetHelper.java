@@ -10,12 +10,14 @@ import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.DataValidationConstraint;
 import org.apache.poi.ss.usermodel.DataValidationHelper;
+import org.apache.poi.ss.usermodel.Name;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.ShapeTypes;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.CellRangeAddressList;
+import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.util.Units;
 import org.apache.poi.xssf.usermodel.XSSFClientAnchor;
 import org.apache.poi.xssf.usermodel.XSSFDrawing;
@@ -36,25 +38,31 @@ import cn.javaex.officejj.excel.entity.SheetPrintArea;
 
 /**
  * Sheet操作
- * 
+ *
  * @author 陈霓清
  */
 public class SheetHelper {
-	
+
 	/** 默认sheet页名称 */
 	public static final String SHEET_NAME = "Sheet1";
 	/** 行高基数 */
 	public static final int BASE_ROW_HEIGHT = 20;
 	/** 列宽基数 */
 	public static final int BASE_COLUMN_WIDTH = 256;
-	
+	/** Excel 显式下拉列表的公式长度上限，包含选项之间的分隔符 */
+	private static final int EXPLICIT_LIST_FORMULA_LIMIT = 255;
+	/** 隐藏下拉数据源 Sheet 的名称前缀，控制在 31 个字符以内 */
+	private static final String SELECT_SOURCE_SHEET_PREFIX = "_officejj_select_";
+	/** 隐藏下拉数据源命名区域的前缀，避免和用户已有名称冲突 */
+	private static final String SELECT_SOURCE_NAME_PREFIX = "_officejj_select_range_";
+
 	// 存储值替换
 	public Map<String, Object> replaceMap = new HashMap<String, Object>();
 	// 存储格式化
 	public Map<String, Object> formatMap = new HashMap<String, Object>();
 	// 存储合并多个单元格数据的成员变量
 	public Map<String, String> skipMap = new HashMap<String, String>();
-	
+
 	/**
 	 * 自动合并列
 	 * @param sheet
@@ -64,9 +72,22 @@ public class SheetHelper {
 	 * @param clazz
 	 */
 	public void setAutoMergeCol(Sheet sheet, int colNum, int firstRow, int lastRow, Class<?> clazz) {
-		
+
 	}
-	
+
+	/**
+	 * 自动合并列，并用指定依赖列作为合并边界。
+	 * @param sheet
+	 * @param colNum
+	 * @param firstRow
+	 * @param lastRow
+	 * @param clazz
+	 * @param mergeByColNumArr 依赖列（从0开始计算），当前列值和依赖列值都相同才合并
+	 */
+	public void setAutoMergeCol(Sheet sheet, int colNum, int firstRow, int lastRow, Class<?> clazz, int... mergeByColNumArr) {
+		this.setAutoMergeCol(sheet, colNum, firstRow, lastRow, clazz);
+	}
+
 	/**
 	 * 自动合并行
 	 * @param sheet
@@ -76,9 +97,9 @@ public class SheetHelper {
 	 * @param clazz
 	 */
 	public void setAutoMergeRow(Sheet sheet, int rowNum, int firstCol, Integer lastCol, Class<?> clazz) {
-		
+
 	}
-	
+
 	/**
 	 * 设置合并
 	 * @param sheet
@@ -89,9 +110,9 @@ public class SheetHelper {
 	 * @param clazz
 	 */
 	public void setMerge(Sheet sheet, int firstRow, int lastRow, int firstCol, int lastCol, Class<?> clazz) {
-		
+
 	}
-	
+
 	/**
 	 * 画线条，带收缩率
 	 *
@@ -105,21 +126,21 @@ public class SheetHelper {
 	 * @param hasArrow 是否带箭头
 	 * @param isDottedLine 是否是虚线，false为实线
 	 */
-	public void drawLine(Sheet sheet, int colA, int rowA, int colB, int rowB, 
+	public void drawLine(Sheet sheet, int colA, int rowA, int colB, int rowB,
 			int[] colorRGB, double lineWidth, double shrinkRatio, boolean hasArrow, boolean isDottedLine) {
 		// 1. anchor区范围
 		int col1 = Math.min(colA, colB);
 		int col2 = Math.max(colA, colB);
 		int row1 = Math.min(rowA, rowB);
 		int row2 = Math.max(rowA, rowB);
-		
+
 		// 2. 所有相关格子的cell左上EMU
 		long[] colStarts = new long[Math.max(colA, colB)+2]; // 用于缓存提高效率
 		colStarts[0] = 0;
 		for(int i = 1; i < colStarts.length; i++) {
 			colStarts[i] = colStarts[i-1] + Units.pixelToEMU((int) sheet.getColumnWidthInPixels(i-1));
 		}
-		
+
 		long[] rowStarts = new long[Math.max(rowA, rowB) + 2];
 		rowStarts[0] = 0;
 		for (int i=1;i<rowStarts.length;i++) {
@@ -127,56 +148,56 @@ public class SheetHelper {
 			float rh = rObj != null ? rObj.getHeightInPoints() : sheet.getDefaultRowHeightInPoints();
 			rowStarts[i] = rowStarts[i-1] + Units.pixelToEMU(Math.round(rh * Units.PIXEL_DPI / Units.POINT_DPI));
 		}
-		
+
 		// 3. 计算两点实际中心，缩短80%，得到新起点(sx, sy)和新终点(ex, ey)
 		int cell1w = (int) sheet.getColumnWidthInPixels(colA);
 		int cell1h = Math.round((sheet.getRow(rowA)!=null ? sheet.getRow(rowA).getHeightInPoints() : sheet.getDefaultRowHeightInPoints()) * Units.PIXEL_DPI / Units.POINT_DPI);
 		int cell2w = (int) sheet.getColumnWidthInPixels(colB);
 		int cell2h = Math.round((sheet.getRow(rowB)!=null ? sheet.getRow(rowB).getHeightInPoints() : sheet.getDefaultRowHeightInPoints()) * Units.PIXEL_DPI / Units.POINT_DPI);
-		
+
 		long absCx1 = colStarts[colA] + Units.pixelToEMU(cell1w/2);
 		long absCy1 = rowStarts[rowA] + Units.pixelToEMU(cell1h/2);
 		long absCx2 = colStarts[colB] + Units.pixelToEMU(cell2w/2);
 		long absCy2 = rowStarts[rowB] + Units.pixelToEMU(cell2h/2);
-		
+
 		double leave = (1 - shrinkRatio) / 2;
 		long sx = (long)(absCx1 + (absCx2 - absCx1) * leave);
 		long sy = (long)(absCy1 + (absCy2 - absCy1) * leave);
 		long ex = (long)(absCx1 + (absCx2 - absCx1) * (1 - leave));
 		long ey = (long)(absCy1 + (absCy2 - absCy1) * (1 - leave));
-		
+
 		// 4. 计算anchor左上、右下单元格的左上绝对EMU
 		long anchorBaseX1 = colStarts[col1];
 		long anchorBaseY1 = rowStarts[row1];
 		long anchorBaseX2 = colStarts[col2];
 		long anchorBaseY2 = rowStarts[row2];
-		
+
 		// 5. 计算dx1/dy1/dx2/dy2：均为“端点EMU-对应anchor格左上EMU”
 		int dx1 = (int)(sx - anchorBaseX1);
 		int dy1 = (int)(sy - anchorBaseY1);
 		int dx2 = (int)(ex - anchorBaseX2);
 		int dy2 = (int)(ey - anchorBaseY2);
-		
+
 		// 6. 安全限定：dx1/dy1 必须在 [0, anchor单元格宽/高EMU]内
 		int anchor1wEMU = Units.pixelToEMU((int)sheet.getColumnWidthInPixels(col1));
 		int anchor1hEMU = Units.pixelToEMU(Math.round((sheet.getRow(row1)!=null ? sheet.getRow(row1).getHeightInPoints() : sheet.getDefaultRowHeightInPoints()) * Units.PIXEL_DPI / Units.POINT_DPI));
 		int anchor2wEMU = Units.pixelToEMU((int)sheet.getColumnWidthInPixels(col2));
 		int anchor2hEMU = Units.pixelToEMU(Math.round((sheet.getRow(row2)!=null ? sheet.getRow(row2).getHeightInPoints() : sheet.getDefaultRowHeightInPoints()) * Units.PIXEL_DPI / Units.POINT_DPI));
-		
+
 		dx1 = Math.max(0, Math.min(dx1, anchor1wEMU));
 		dy1 = Math.max(0, Math.min(dy1, anchor1hEMU));
 		dx2 = Math.max(0, Math.min(dx2, anchor2wEMU));
 		dy2 = Math.max(0, Math.min(dy2, anchor2hEMU));
-		
+
 		// 7. 创建anchor
 		XSSFClientAnchor anchor = new XSSFClientAnchor(dx1, dy1, dx2, dy2, col1, row1, col2, row2);
-		
+
 		XSSFDrawing drawing = (XSSFDrawing) sheet.createDrawingPatriarch();
 		XSSFSimpleShape line = drawing.createSimpleShape(anchor);
 		line.setShapeType(ShapeTypes.LINE);
 		line.setLineWidth(lineWidth);
 		line.setLineStyleColor(colorRGB[0], colorRGB[1], colorRGB[2]);
-		
+
 		// 线条
 		CTShape ctShape = (CTShape) line.getCTShape();
 		CTShapeProperties props = ctShape.getSpPr();
@@ -204,14 +225,14 @@ public class SheetHelper {
 				}
 			}
 		}
-		
+
 		// 垂直翻转
 		if (colA > colB) {
 			CTTransform2D xfrm = ctShape.getSpPr().getXfrm();
 			xfrm.setFlipV(true);
 		}
 	}
-	
+
 	/**
 	 * 画线条
 	 *
@@ -224,26 +245,28 @@ public class SheetHelper {
 	 * @param hasArrow 是否带箭头
 	 * @param isDottedLine 是否是虚线，false为实线
 	 */
-	public void drawLine(Sheet sheet, int colA, int rowA, int colB, int rowB, int[] colorRGB, 
+	public void drawLine(Sheet sheet, int colA, int rowA, int colB, int rowB, int[] colorRGB,
 			double lineWidth, boolean hasArrow, boolean isDottedLine) {
 		// anchor参数需满足 col1<=col2, row1<=row2
 		int col1 = Math.min(colA, colB);
 		int col2 = Math.max(colA, colB);
 		int row1 = Math.min(rowA, rowB);
 		int row2 = Math.max(rowA, rowB);
-		
+
 		// 获取实际宽高
 		int cell1w = (int) sheet.getColumnWidthInPixels(colA);
-		int cell1h = Math.round(sheet.getRow(rowA).getHeightInPoints() * Units.PIXEL_DPI / Units.POINT_DPI);
+		Row rowObjA = sheet.getRow(rowA);
+		Row rowObjB = sheet.getRow(rowB);
+		int cell1h = Math.round((rowObjA!=null ? rowObjA.getHeightInPoints() : sheet.getDefaultRowHeightInPoints()) * Units.PIXEL_DPI / Units.POINT_DPI);
 		int cell2w = (int) sheet.getColumnWidthInPixels(colB);
-		int cell2h = Math.round(sheet.getRow(rowB).getHeightInPoints() * Units.PIXEL_DPI / Units.POINT_DPI);
+		int cell2h = Math.round((rowObjB!=null ? rowObjB.getHeightInPoints() : sheet.getDefaultRowHeightInPoints()) * Units.PIXEL_DPI / Units.POINT_DPI);
 		if (cell1h == 0) {
 			cell1h = (int) (sheet.getDefaultRowHeightInPoints() * Units.PIXEL_DPI / Units.POINT_DPI);
 		}
 		if (cell2h == 0) {
 			cell2h = (int) (sheet.getDefaultRowHeightInPoints() * Units.PIXEL_DPI / Units.POINT_DPI);
 		}
-		
+
 		// 计算相对偏移，把线端分别对准目标格子中心
 		int dx1, dy1, dx2, dy2;
 		if (colA <= colB && rowA <= rowB) {
@@ -270,16 +293,16 @@ public class SheetHelper {
 			dx2 = Units.pixelToEMU(cell1w/2);
 			dy2 = Units.pixelToEMU(cell1h/2);
 		}
-		
+
 		// anchor范围必须col1<=col2，row1<=row2
 		XSSFClientAnchor anchor = new XSSFClientAnchor(dx1, dy1, dx2, dy2, col1, row1, col2, row2);
-		
+
 		XSSFDrawing drawing = (XSSFDrawing) sheet.createDrawingPatriarch();
 		XSSFSimpleShape line = drawing.createSimpleShape(anchor);
 		line.setShapeType(ShapeTypes.LINE);
 		line.setLineWidth(lineWidth);
 		line.setLineStyleColor(colorRGB[0], colorRGB[1], colorRGB[2]);
-		
+
 		// 线条
 		CTShape ctShape = (CTShape) line.getCTShape();
 		CTShapeProperties props = ctShape.getSpPr();
@@ -307,7 +330,7 @@ public class SheetHelper {
 				}
 			}
 		}
-		
+
 		// 垂直翻转
 		if (colA > colB) {
 			CTTransform2D xfrm = ctShape.getSpPr().getXfrm();
@@ -320,12 +343,12 @@ public class SheetHelper {
 	 * @param sheet
 	 * @param templateRows
 	 * @param copyTimes
-	 * @param makePageBreakByBlock 
+	 * @param makePageBreakByBlock
 	 */
 	public void copyTemplate(Sheet sheet, int templateRows, int copyTimes, boolean makePageBreakByBlock) {
-		
+
 	}
-	
+
 	/**
 	 * 创建Header
 	 * @param sheet
@@ -334,28 +357,28 @@ public class SheetHelper {
 	 * @throws Exception
 	 */
 	public void setHeader(Sheet sheet, Class<?> clazz, String title) throws Exception {
-		
+
 	}
-	
+
 	/**
 	 * 设置基本属性
 	 * @param sheet
 	 * @param clazz
 	 */
 	public void setBasicData(Sheet sheet, Class<?> clazz) {
-		
+
 	}
-	
+
 	/**
 	 * 根据注解创建内容
 	 * @param sheet
 	 * @param clazz
 	 * @param list
 	 * @param title
-	 * @throws Exception 
+	 * @throws Exception
 	 */
 	public void write(Sheet sheet, Class<?> clazz, List<?> list, String title) throws Exception {
-		
+
 	}
 
 	/**
@@ -367,25 +390,36 @@ public class SheetHelper {
 	 * @throws Exception
 	 */
 	public void writeByThreads(Sheet sheet, Class<?> clazz, List<?> list) throws Exception {
-		
+
 	}
-	
+
 	/**
 	 * 根据设置类创建内容
 	 * @param sheet
 	 * @param excelSetting
 	 */
 	public void write(Sheet sheet, ExcelSetting excelSetting) {
-		
+
 	}
-	
+
 	/**
 	 * 根据模板占位符替换内容
 	 * @param sheet
 	 * @param param
 	 */
 	public void write(Sheet sheet, Map<String, Object> param) {
-		
+
+	}
+
+	/**
+	 * 根据模板占位符替换内容。
+	 * 默认实现保持旧行为，具体模板实现类可根据 autoDataHeight 决定是否自动调整行高。
+	 * @param sheet
+	 * @param param
+	 * @param autoDataHeight 是否根据文本内容自动调整数据行高
+	 */
+	public void write(Sheet sheet, Map<String, Object> param, boolean autoDataHeight) {
+		this.write(sheet, param);
 	}
 
 	/**
@@ -395,12 +429,12 @@ public class SheetHelper {
 	 * @param clazz     自定义实体类
 	 * @param rowNum    从第几行开始读取（从0开始计算）
 	 * @return
-	 * @throws Exception 
+	 * @throws Exception
 	 */
 	public <T> List<T> read(Sheet sheet, Class<T> clazz, int rowNum) throws Exception {
 		return null;
 	}
-	
+
 	/**
 	 * 设置下拉选项
 	 * @param sheet
@@ -413,21 +447,21 @@ public class SheetHelper {
 		if (selectDataArr==null || selectDataArr.length==0) {
 			return;
 		}
-		
-		// 获取单元格样式
-		CellStyle cellStyle = null;
-		try {
-			cellStyle = sheet.getRow(startRowIndex).getCell(colIndex).getCellStyle();
-		} catch (Exception e) {
-			// 如果没有该单元格存在，则使用默认的样式
-			cellStyle = sheet.getWorkbook().createCellStyle();
+		if (sheet==null) {
+			throw new IllegalArgumentException("sheet不能为空");
 		}
-		// 自动换行
-		cellStyle.setWrapText(true);
-		
+		if (colIndex<0 || startRowIndex<0 || endRowIndex<startRowIndex) {
+			throw new IllegalArgumentException("下拉框的列号或行号范围不合法");
+		}
+
+		String[] safeSelectDataArr = this.normalizeSelectData(selectDataArr);
+
+		// 复制首个目标单元格样式后再开启自动换行，避免修改共享样式影响其他单元格
+		CellStyle cellStyle = this.createWrapTextStyle(sheet, colIndex, startRowIndex);
+
 		Row row = null;
 		Cell cell = null;
-		
+
 		for (int i=startRowIndex; i<=endRowIndex; i++) {
 			row = sheet.getRow(i);
 			if (row==null) {
@@ -438,20 +472,168 @@ public class SheetHelper {
 					cell = row.createCell(colIndex);
 				}
 			}
-			
+
 			cell.setCellStyle(cellStyle);
 		}
-		
+
 		// 下拉的数据、起始行、终止行、起始列、终止列
 		CellRangeAddressList addressList = new CellRangeAddressList(startRowIndex, endRowIndex, colIndex, colIndex);
-		
+
 		// 生成下拉框内容
 		DataValidationHelper helper = sheet.getDataValidationHelper();
-		DataValidationConstraint constraint = helper.createExplicitListConstraint(selectDataArr); 
+		DataValidationConstraint constraint = this.createSelectConstraint(sheet, helper, safeSelectDataArr);
 		DataValidation dataValidation = helper.createValidation(constraint, addressList);
-		
+
 		// 设置数据有效性
 		sheet.addValidationData(dataValidation);
+	}
+
+	/**
+	 * 复制目标单元格的原样式，再打开自动换行。
+	 * 不能直接修改 cell.getCellStyle() 返回的样式对象，因为 POI 的样式会被多个单元格共享。
+	 * @param sheet
+	 * @param colIndex
+	 * @param startRowIndex
+	 * @return
+	 */
+	private CellStyle createWrapTextStyle(Sheet sheet, int colIndex, int startRowIndex) {
+		CellStyle sourceStyle = null;
+		Row sourceRow = sheet.getRow(startRowIndex);
+		if (sourceRow!=null) {
+			Cell sourceCell = sourceRow.getCell(colIndex);
+			if (sourceCell!=null) {
+				sourceStyle = sourceCell.getCellStyle();
+			}
+		}
+
+		CellStyle cellStyle = sheet.getWorkbook().createCellStyle();
+		if (sourceStyle!=null) {
+			cellStyle.cloneStyleFrom(sourceStyle);
+		}
+		cellStyle.setWrapText(true);
+
+		return cellStyle;
+	}
+
+	/**
+	 * 空值统一转换为空字符串，避免 POI 在生成显式列表或隐藏数据源时出现空指针。
+	 * @param selectDataArr
+	 * @return
+	 */
+	private String[] normalizeSelectData(String[] selectDataArr) {
+		String[] safeSelectDataArr = new String[selectDataArr.length];
+		for (int i=0; i<selectDataArr.length; i++) {
+			safeSelectDataArr[i] = selectDataArr[i]==null ? "" : selectDataArr[i];
+		}
+
+		return safeSelectDataArr;
+	}
+
+	/**
+	 * 创建下拉框约束。
+	 * 候选值较短时继续使用显式列表，兼容旧文件结构；
+	 * 超过 Excel 255 字符限制时，改用隐藏 Sheet + 命名区域，绕开显式列表长度限制。
+	 * @param sheet
+	 * @param helper
+	 * @param selectDataArr
+	 * @return
+	 */
+	private DataValidationConstraint createSelectConstraint(Sheet sheet, DataValidationHelper helper, String[] selectDataArr) {
+		if (this.canUseExplicitList(selectDataArr)) {
+			return helper.createExplicitListConstraint(selectDataArr);
+		}
+
+		String rangeName = this.createHiddenSelectDataRange(sheet, selectDataArr);
+		return helper.createFormulaListConstraint(rangeName);
+	}
+
+	/**
+	 * 判断是否可以使用 POI 显式列表。
+	 * Excel 会把显式列表拼成一个公式字符串，候选值总长度加分隔符超过 255 时会报错。
+	 * @param selectDataArr
+	 * @return
+	 */
+	private boolean canUseExplicitList(String[] selectDataArr) {
+		int formulaLength = 0;
+		for (int i=0; i<selectDataArr.length; i++) {
+			if (i>0) {
+				formulaLength++;
+			}
+			formulaLength += selectDataArr[i].length();
+			if (formulaLength>EXPLICIT_LIST_FORMULA_LIMIT) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * 把下拉候选值写入隐藏 Sheet，并返回可被数据有效性引用的命名区域。
+	 * @param sheet
+	 * @param selectDataArr
+	 * @return
+	 */
+	private String createHiddenSelectDataRange(Sheet sheet, String[] selectDataArr) {
+		Workbook workbook = sheet.getWorkbook();
+		int maxRows = workbook.getSpreadsheetVersion().getMaxRows();
+		if (selectDataArr.length>maxRows) {
+			throw new IllegalArgumentException("下拉候选值数量超过当前Excel格式允许的最大行数：" + maxRows);
+		}
+
+		String hiddenSheetName = this.createUniqueHiddenSheetName(workbook);
+		Sheet hiddenSheet = workbook.createSheet(hiddenSheetName);
+		for (int i=0; i<selectDataArr.length; i++) {
+			Row row = hiddenSheet.createRow(i);
+			row.createCell(0).setCellValue(selectDataArr[i]);
+		}
+
+		int hiddenSheetIndex = workbook.getSheetIndex(hiddenSheet);
+		workbook.setSheetHidden(hiddenSheetIndex, true);
+
+		String rangeName = this.createUniqueRangeName(workbook);
+		Name name = workbook.createName();
+		name.setNameName(rangeName);
+		name.setRefersToFormula("'" + this.escapeSheetName(hiddenSheetName) + "'!$" + CellReference.convertNumToColString(0) + "$1:$" + CellReference.convertNumToColString(0) + "$" + selectDataArr.length);
+
+		return rangeName;
+	}
+
+	/**
+	 * 创建不和已有 Sheet 冲突的隐藏 Sheet 名称。
+	 * @param workbook
+	 * @return
+	 */
+	private String createUniqueHiddenSheetName(Workbook workbook) {
+		String sheetName = null;
+		do {
+			sheetName = SELECT_SOURCE_SHEET_PREFIX + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+		} while (workbook.getSheet(sheetName)!=null);
+
+		return sheetName;
+	}
+
+	/**
+	 * 创建不和已有命名区域冲突的名称。
+	 * @param workbook
+	 * @return
+	 */
+	private String createUniqueRangeName(Workbook workbook) {
+		String rangeName = null;
+		do {
+			rangeName = SELECT_SOURCE_NAME_PREFIX + UUID.randomUUID().toString().replace("-", "");
+		} while (workbook.getName(rangeName)!=null);
+
+		return rangeName;
+	}
+
+	/**
+	 * Sheet 名出现在公式中时需要转义单引号。
+	 * @param sheetName
+	 * @return
+	 */
+	private String escapeSheetName(String sheetName) {
+		return sheetName.replace("'", "''");
 	}
 
 	/**
@@ -464,12 +646,12 @@ public class SheetHelper {
 		if (rows == 0) {
 			return;
 		}
-		
+
 		// 解决list占位符在最后一行时报错的BUG
 		if ((startRow + 1) > sheet.getLastRowNum()) {
 			sheet.createRow(startRow + 2);
 		}
-		
+
 		/**
 		 * startRow                  从下标为startRow的行开始移动
 		 * endRow                    到下标为endRow的行结束移动
@@ -478,16 +660,16 @@ public class SheetHelper {
 		 * resetOriginalRowHeight    是否将原始行的高度设置为默认
 		 */
 		sheet.shiftRows(startRow + 1, sheet.getLastRowNum(), rows, true, false);
-		
+
 		RowHelper rowHelper = new RowHelper();
-		
+
 		for (int i=0; i<rows; i++) {
 			Row sourceRow = null;
 			Row targetRow = null;
-			
+
 			sourceRow = sheet.getRow(startRow);
 			targetRow = sheet.createRow(++startRow);
-			
+
 			rowHelper.copyRow(sheet, sourceRow, targetRow);
 		}
 	}
@@ -501,10 +683,10 @@ public class SheetHelper {
 		if (password==null || password.length()==0) {
 			password = UUID.randomUUID().toString().replace("-", "");
 		}
-		
+
 		sheet.protectSheet(password);
 	}
-	
+
 	/**
 	 * 设置下拉选项
 	 * @param sheet
@@ -517,15 +699,16 @@ public class SheetHelper {
 		if (colNumArr==null || colNumArr.length==0) {
 			return;
 		}
-		
+
 		// 最大行
 		int lastRowNum = sheet.getLastRowNum();
+		Map<Short, CellStyle> unlockedStyleMap = new HashMap<Short, CellStyle>();
 		for (int rowIndex=0; rowIndex<=lastRowNum; rowIndex++) {
 			Row row = sheet.getRow(rowIndex);
 			if (row==null) {
 				continue;
 			}
-			
+
 			// 最大列
 			int lastCellNum = (int) row.getLastCellNum();
 			for (int colIndex=0; colIndex<lastCellNum; colIndex++) {
@@ -533,26 +716,27 @@ public class SheetHelper {
 				if (ArrayHandler.contains(colNumArr, colIndex+1)) {
 					continue;
 				}
-				
+
 				// 获取单元格
 				Cell cell = row.getCell(colIndex);
 				if (cell==null) {
 					cell = row.createCell(colIndex);
 				}
-				
+
 				// 获取单元格样式
 				CellStyle cellStyle = cell.getCellStyle();
-				
+
 				// 设置可编辑样式
-				CellStyle cellUnlockedStyle = sheet.getWorkbook().createCellStyle();
-				// 水平对齐方式
-				cellUnlockedStyle.setAlignment(cellStyle.getAlignment());
-				// 垂直对齐方式
-				cellUnlockedStyle.setVerticalAlignment(cellStyle.getVerticalAlignment());
-				// 自动换行
-				cellUnlockedStyle.setWrapText(true);
-				// 设置为可编辑的
-				cellUnlockedStyle.setLocked(false);
+				CellStyle cellUnlockedStyle = unlockedStyleMap.get(cellStyle.getIndex());
+				if (cellUnlockedStyle==null) {
+					cellUnlockedStyle = sheet.getWorkbook().createCellStyle();
+					cellUnlockedStyle.cloneStyleFrom(cellStyle);
+					// 自动换行
+					cellUnlockedStyle.setWrapText(true);
+					// 设置为可编辑的
+					cellUnlockedStyle.setLocked(false);
+					unlockedStyleMap.put(cellStyle.getIndex(), cellUnlockedStyle);
+				}
 				// 重新设置单元格样式
 				cell.setCellStyle(cellUnlockedStyle);
 			}
@@ -585,7 +769,7 @@ public class SheetHelper {
 	 * @param printArea          打印区域
 	 */
 	public void copySheets(Workbook workbook, String sourceSheetName, String targetSheetName, int copyCount, SheetPrintArea printArea) {
-		
+
 	}
 
 }

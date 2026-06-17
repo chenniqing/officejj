@@ -6,13 +6,13 @@ import java.io.Serializable;
 
 /**
  * 字体样式
- * 
+ *
  * @author 陈霓清
  */
 public class Font implements Serializable {
-	
+
 	private static final long serialVersionUID = 1L;
-	
+
 	private String text;             // 文本内容
 	private String color;            // 颜色：RGB，例如：FF0000
 	private String fontFamily;       // 字体
@@ -125,25 +125,22 @@ public class Font implements Serializable {
 	public void setStrike(boolean strike) {
 		this.strike = strike;
 	}
-	
+
 	/**
 	 * 对象序列化
 	 */
 	@Override
 	public String toString() {
 		String objStr = "";
-		
-		try {
-			ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-			ObjectOutputStream out = new ObjectOutputStream(byteArrayOutputStream);
+
+		try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+				ObjectOutputStream out = new ObjectOutputStream(byteArrayOutputStream)) {
 			out.writeObject(this);
 			objStr = byteArrayOutputStream.toString("ISO-8859-1");
-			out.close();
-			byteArrayOutputStream.close();
 		} catch (Exception e) {
-			e.printStackTrace();
+			throw new RuntimeException("字体样式序列化失败", e);
 		}
-		
+
 		return objStr;
 	}
 

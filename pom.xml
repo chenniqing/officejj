@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>cn.javaex</groupId>
 	<artifactId>officejj</artifactId>
-	<version>6.0.0</version>
+	<version>6.1.1</version>
 	<name>officejj</name>
 	<url>http://www.javaex.cn</url>
 	<description>Word,Excel,Pdf tools</description>

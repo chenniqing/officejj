@@ -1029,21 +1029,51 @@ public class SheetTemplateHelper extends SheetHelper {
 	 */
 	@Override
 	public void copyTemplate(Sheet sheet, int templateRows, int copyTimes, boolean makePageBreakByBlock) {
-		RowHelper rowHelper = new RowHelper();
 		CellRangeAddress originalPrintArea = getCurrentPrintArea(sheet);
 		int srcStartRow = originalPrintArea==null ? 0 : originalPrintArea.getFirstRow();
 		int blockRows = getTemplateBlockRows(sheet, srcStartRow, templateRows, originalPrintArea);
+		this.copyTemplateBlock(sheet, srcStartRow, blockRows, copyTimes, makePageBreakByBlock, originalPrintArea);
+	}
+
+	/**
+	 * 复制指定起始行和终止行的模板。
+	 * @param sheet
+	 * @param startRow              模板起始行（从1开始计算，包含）
+	 * @param endRow                模板终止行（从1开始计算，包含）
+	 * @param copyTimes             复制几次
+	 * @param makePageBreakByBlock  是否按复制块设置分页（打印区域）
+	 */
+	@Override
+	public void copyTemplate(Sheet sheet, int startRow, int endRow, int copyTimes, boolean makePageBreakByBlock) {
+		if (startRow<=0) {
+			throw new IllegalArgumentException("startRow must be greater than 0.");
+		}
+		if (endRow<startRow) {
+			throw new IllegalArgumentException("endRow must be greater than or equal to startRow.");
+		}
+
+		CellRangeAddress originalPrintArea = getCurrentPrintArea(sheet);
+		int srcStartRow = startRow - 1;
+		int blockRows = endRow - startRow + 1;
+		this.copyTemplateBlock(sheet, srcStartRow, blockRows, copyTimes, makePageBreakByBlock, originalPrintArea);
+	}
+
+	private void copyTemplateBlock(Sheet sheet, int srcStartRow, int blockRows, int copyTimes, boolean makePageBreakByBlock, CellRangeAddress originalPrintArea) {
+		if (copyTimes<0) {
+			throw new IllegalArgumentException("copyTimes must be greater than or equal to 0.");
+		}
 		if (blockRows<=0) {
 			return;
 		}
 
+		RowHelper rowHelper = new RowHelper();
 		// 适用于所有复制的偏移量
 		for (int n = 1; n <= copyTimes; n++) {
 			int destStartRow = srcStartRow + n * blockRows;
 			// 1. 复制每一行
 			for (int i = 0; i < blockRows; i++) {
 				Row srcRow = sheet.getRow(srcStartRow + i);
-				Row tgtRow = sheet.createRow(destStartRow + i);
+				Row tgtRow = getOrCreateRow(sheet, destStartRow + i);
 				rowHelper.copyRow(sheet.getWorkbook(), srcRow, tgtRow);
 			}
 			// 2. 合并单元格
@@ -1068,6 +1098,29 @@ public class SheetTemplateHelper extends SheetHelper {
 			int totalRows = (copyTimes + 1) * blockRows; // 模板+N次复制，每个都是一个打印区域块
 			makePageBreakByBlock(sheet, srcStartRow, blockRows, totalRows, originalPrintArea, copyTimes + 1);
 		}
+	}
+
+	private static Row getOrCreateRow(Sheet sheet, int rowIndex) {
+		Row row = sheet.getRow(rowIndex);
+		return row==null ? sheet.createRow(rowIndex) : row;
+	}
+
+	private static int[] getPrintColumns(Sheet sheet, int firstRow, int lastRow) {
+		int firstCol = Integer.MAX_VALUE;
+		int lastCol = -1;
+		for (int i=firstRow; i<=lastRow; i++) {
+			Row row = sheet.getRow(i);
+			if (row==null || row.getFirstCellNum()<0 || row.getLastCellNum()<1) {
+				continue;
+			}
+			firstCol = Math.min(firstCol, row.getFirstCellNum());
+			lastCol = Math.max(lastCol, row.getLastCellNum() - 1);
+		}
+
+		if (lastCol<0) {
+			return null;
+		}
+		return new int[] {firstCol, lastCol};
 	}
 
 	/**
@@ -1097,14 +1150,15 @@ public class SheetTemplateHelper extends SheetHelper {
 			// 否则 getLastCellNum() 会把右侧曾经编辑过或带样式的空白列也纳入打印区域。
 			firstCol = originalPrintArea.getFirstColumn();
 			lastCol = originalPrintArea.getLastColumn();
-			firstRow = originalPrintArea.getFirstRow();
-			lastRow = firstRow + pageCount * blockSize - 1;
+			firstRow = Math.min(originalPrintArea.getFirstRow(), firstBlockRow);
+			lastRow = firstBlockRow + pageCount * blockSize - 1;
 		} else {
-			Row row = sheet.getRow(0);
-			if (row==null || row.getLastCellNum()<1) {
+			int[] printColumns = getPrintColumns(sheet, firstBlockRow, lastRow);
+			if (printColumns==null) {
 				return;
 			}
-			lastCol = row.getLastCellNum() - 1;
+			firstCol = printColumns[0];
+			lastCol = printColumns[1];
 		}
 		Workbook workbook = sheet.getWorkbook();
 		workbook.setPrintArea(workbook.getSheetIndex(sheet), firstCol, lastCol, firstRow, lastRow);

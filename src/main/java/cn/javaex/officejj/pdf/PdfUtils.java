@@ -118,6 +118,18 @@ public class PdfUtils {
 	}
 
 	/**
+	 * 替换Pdf模板中的占位符内容（只读）。
+	 * 该重载允许统一指定默认字体，适合中文表单模板批量填充后扁平化输出。
+	 * @param reader PDF模板读取器
+	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
+	 * @param fontFamily 默认字体路径，支持绝对路径、相对路径和 resources: 前缀
+	 * @return
+	 */
+	public static ByteArrayOutputStream writePdf(PdfReader reader, Map<String, Object> param, String fontFamily) {
+		return writePdf(reader, param, true, fontFamily);
+	}
+
+	/**
 	 * 替换Pdf中占位符的内容
 	 * @param reader
 	 * @param param
@@ -125,6 +137,19 @@ public class PdfUtils {
 	 * @return
 	 */
 	public static ByteArrayOutputStream writePdf(PdfReader reader, Map<String, Object> param, boolean readOnly) {
+		return writePdf(reader, param, readOnly, null);
+	}
+
+	/**
+	 * 替换Pdf模板中的占位符内容。
+	 * 模板通常由设计好的PDF表单提供，代码只负责把业务字段写入对应表单域并按需扁平化。
+	 * @param reader PDF模板读取器
+	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
+	 * @param readOnly 是否扁平化为只读PDF；true时用户不能继续编辑表单控件
+	 * @param fontFamily 默认字体路径，支持绝对路径、相对路径和 resources: 前缀
+	 * @return
+	 */
+	public static ByteArrayOutputStream writePdf(PdfReader reader, Map<String, Object> param, boolean readOnly, String fontFamily) {
 		AcroFieldsHelp acroFieldsHelp = new AcroFieldsHelp();
 
 		ByteArrayOutputStream bos = null;
@@ -136,7 +161,7 @@ public class PdfUtils {
 			AcroFields form = stamper.getAcroFields();
 
 			// 替换占位符为数据中的内容
-			form = acroFieldsHelp.replaceContent(form, stamper, param);
+			form = acroFieldsHelp.replaceContent(form, stamper, param, fontFamily);
 
 			stamper.setFormFlattening(readOnly);    // 如果为false那么生成的PDF文件还能编辑
 			stamper.close();
@@ -155,6 +180,79 @@ public class PdfUtils {
 		}
 
 		return bos;
+	}
+
+	/**
+	 * 根据PDF模板生成PDF字节数组。
+	 * 适合上传文件服务、写入数据库或异步导出任务，不需要调用方再管理ByteArrayOutputStream生命周期。
+	 * @param reader PDF模板读取器
+	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
+	 * @return
+	 */
+	public static byte[] writePdfToBytes(PdfReader reader, Map<String, Object> param) {
+		return writePdfToBytes(reader, param, true, null);
+	}
+
+	/**
+	 * 根据PDF模板生成PDF字节数组。
+	 * @param reader PDF模板读取器
+	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
+	 * @param fontFamily 默认字体路径，支持绝对路径、相对路径和 resources: 前缀
+	 * @return
+	 */
+	public static byte[] writePdfToBytes(PdfReader reader, Map<String, Object> param, String fontFamily) {
+		return writePdfToBytes(reader, param, true, fontFamily);
+	}
+
+	/**
+	 * 根据PDF模板生成PDF字节数组。
+	 * @param reader PDF模板读取器
+	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
+	 * @param readOnly 是否扁平化为只读PDF
+	 * @param fontFamily 默认字体路径，支持绝对路径、相对路径和 resources: 前缀
+	 * @return
+	 */
+	public static byte[] writePdfToBytes(PdfReader reader, Map<String, Object> param, boolean readOnly, String fontFamily) {
+		ByteArrayOutputStream bos = writePdf(reader, param, readOnly, fontFamily);
+		return bos.toByteArray();
+	}
+
+	/**
+	 * 根据PDF模板生成PDF，并输出到指定路径。
+	 * 该方法和HTML转PDF的createPdf重载区分在第一个参数类型：这里第一个参数是PdfReader模板。
+	 * @param reader PDF模板读取器
+	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
+	 * @param destPath 文件写到哪里的全路径，例如：D:\\1.pdf
+	 * @throws IOException
+	 */
+	public static void createPdf(PdfReader reader, Map<String, Object> param, String destPath) throws IOException {
+		createPdf(reader, param, destPath, true, null);
+	}
+
+	/**
+	 * 根据PDF模板生成PDF，并输出到指定路径。
+	 * @param reader PDF模板读取器
+	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
+	 * @param destPath 文件写到哪里的全路径，例如：D:\\1.pdf
+	 * @param fontFamily 默认字体路径，支持绝对路径、相对路径和 resources: 前缀
+	 * @throws IOException
+	 */
+	public static void createPdf(PdfReader reader, Map<String, Object> param, String destPath, String fontFamily) throws IOException {
+		createPdf(reader, param, destPath, true, fontFamily);
+	}
+
+	/**
+	 * 根据PDF模板生成PDF，并输出到指定路径。
+	 * @param reader PDF模板读取器
+	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
+	 * @param destPath 文件写到哪里的全路径，例如：D:\\1.pdf
+	 * @param readOnly 是否扁平化为只读PDF
+	 * @param fontFamily 默认字体路径，支持绝对路径、相对路径和 resources: 前缀
+	 * @throws IOException
+	 */
+	public static void createPdf(PdfReader reader, Map<String, Object> param, String destPath, boolean readOnly, String fontFamily) throws IOException {
+		ByteArrayOutputStream bos = writePdf(reader, param, readOnly, fontFamily);
+		output(bos, destPath);
 	}
 
 	/**

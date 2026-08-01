@@ -350,6 +350,18 @@ public class SheetHelper {
 	}
 
 	/**
+	 * 复制指定起始行和终止行的模板
+	 * @param sheet
+	 * @param startRow              模板起始行（从1开始计算，包含）
+	 * @param endRow                模板终止行（从1开始计算，包含）
+	 * @param copyTimes             复制几次
+	 * @param makePageBreakByBlock  是否按复制块设置分页（打印区域）
+	 */
+	public void copyTemplate(Sheet sheet, int startRow, int endRow, int copyTimes, boolean makePageBreakByBlock) {
+
+	}
+
+	/**
 	 * 创建Header
 	 * @param sheet
 	 * @param clazz

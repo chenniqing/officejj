@@ -1560,6 +1560,21 @@ public class ExcelUtils {
 	}
 
 	/**
+	 * 复制指定起始行和终止行的模板
+	 * @since 6.0.0
+	 *
+	 * @param sheet
+	 * @param startRow              模板起始行（从1开始计算，包含）
+	 * @param endRow                模板终止行（从1开始计算，包含）
+	 * @param copyTimes             复制几次
+	 * @param makePageBreakByBlock  是否按复制块设置分页（打印区域）
+	 */
+	public static void copyTemplate(Sheet sheet, int startRow, int endRow, int copyTimes, boolean makePageBreakByBlock) {
+		SheetTemplateHelper sheetHelper = new SheetTemplateHelper();
+		sheetHelper.copyTemplate(sheet, startRow, endRow, copyTimes, makePageBreakByBlock);
+	}
+
+	/**
 	 * 复制Sheet
 	 * @since 5.0.0
 	 *

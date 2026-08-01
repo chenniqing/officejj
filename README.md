@@ -113,7 +113,7 @@
 <dependency>
     <groupId>cn.javaex</groupId>
     <artifactId>officejj</artifactId>
-    <version>6.1.1</version>
+    <version>6.3.0</version>
 </dependency>
 ```
 

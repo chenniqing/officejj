@@ -26,6 +26,17 @@ import cn.javaex.officejj.common.entity.RGB;
  * @author 陈霓清
  */
 public class AcroFieldsHelp extends Helper {
+	private TextFieldLayoutHelper textFieldLayoutHelper = new TextFieldLayoutHelper();
+
+	/**
+	 * 获取本次填充记录的模板排版配置。
+	 *
+	 * @return 本次填充使用的排版处理器，在字段扁平化前执行
+	 */
+	public TextFieldLayoutHelper getTextFieldLayoutHelper() {
+		return textFieldLayoutHelper;
+	}
+
 	/**
 	 * 替换占位符内容
 	 * @param form
@@ -46,11 +57,12 @@ public class AcroFieldsHelp extends Helper {
 	 * @param stamper PDF写入器
 	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
 	 * @param defaultFontFamily 默认字体路径，支持绝对路径、相对路径和 resources: 前缀
-	 * @return
-	 * @throws IOException
-	 * @throws DocumentException
+	 * @return 已填充的表单；模板启用的文字居中应在外观写入完成后执行
+	 * @throws IOException 字体或图片读取失败
+	 * @throws DocumentException PDF 外观生成失败
 	 */
 	public AcroFields replaceContent(AcroFields form, PdfStamper stamper, Map<String, Object> param, String defaultFontFamily) throws IOException, DocumentException {
+		textFieldLayoutHelper = new TextFieldLayoutHelper();
 		if (param==null || param.size()==0) {
 			return form;
 		}
@@ -67,15 +79,17 @@ public class AcroFieldsHelp extends Helper {
 			// 文本替换
 			if (value instanceof String) {
 				this.applyDefaultFont(form, key, defaultBaseFont);
-				form.setField(key, (String) value);
+				form.setField(key, textFieldLayoutHelper.prepareText(form, key, (String) value, defaultBaseFont));
 			}
 			// 自定义字体样式
 			else if (value instanceof Font) {
 				Font font = (Font) value;
+				BaseFont selectedBaseFont = defaultBaseFont;
 
 				if (font.getFontFamily()!=null) {
 					String path = super.getRealPath(font.getFontFamily());
 					BaseFont baseFont = BaseFont.createFont(path, BaseFont.IDENTITY_H, BaseFont.NOT_EMBEDDED);
+					selectedBaseFont = baseFont;
 					form.setFieldProperty(key, "textfont", baseFont, null);
 				} else {
 					this.applyDefaultFont(form, key, defaultBaseFont);
@@ -89,7 +103,7 @@ public class AcroFieldsHelp extends Helper {
 					form.setFieldProperty(key, "textsize", font.getFontSize().floatValue(), null);
 				}
 
-				form.setField(key, font.getText());
+				form.setField(key, textFieldLayoutHelper.prepareText(form, key, font.getText(), selectedBaseFont));
 			}
 			// 图片替换
 			else if (value instanceof Picture) {
@@ -126,7 +140,7 @@ public class AcroFieldsHelp extends Helper {
 			// 数字之类的直接转字符串
 			else {
 				this.applyDefaultFont(form, key, defaultBaseFont);
-				form.setField(key, value.toString());
+				form.setField(key, textFieldLayoutHelper.prepareText(form, key, value.toString(), defaultBaseFont));
 			}
 		}
 

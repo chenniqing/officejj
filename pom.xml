@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>cn.javaex</groupId>
 	<artifactId>officejj</artifactId>
-	<version>6.3.0</version>
+	<version>6.3.1</version>
 	<name>officejj</name>
 	<url>http://www.javaex.cn</url>
 	<description>Word,Excel,Pdf tools</description>
@@ -60,12 +60,6 @@
 			<artifactId>spring-webmvc</artifactId>
 			<version>4.3.7.RELEASE</version>
 			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.13.2</version>
-			<scope>test</scope>
 		</dependency>
 	</dependencies>
 	

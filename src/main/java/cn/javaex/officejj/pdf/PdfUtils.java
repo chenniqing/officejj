@@ -45,6 +45,7 @@ import cn.javaex.officejj.pdf.help.AcroFieldsHelp;
 import cn.javaex.officejj.pdf.help.FontFamilyHelper;
 import cn.javaex.officejj.pdf.help.MergeHelper;
 import cn.javaex.officejj.pdf.help.PdfHelper;
+import cn.javaex.officejj.pdf.help.TextFieldLayoutHelper;
 
 /**
  * PDF工具类
@@ -143,11 +144,12 @@ public class PdfUtils {
 	/**
 	 * 替换Pdf模板中的占位符内容。
 	 * 模板通常由设计好的PDF表单提供，代码只负责把业务字段写入对应表单域并按需扁平化。
+	 * 模板设置 OfficeJJVerticalAlign=Center 的文本域按实际文字高度居中，再执行扁平化。
 	 * @param reader PDF模板读取器
 	 * @param param 字段名和值，字段名必须和PDF模板中的表单域名称一致
 	 * @param readOnly 是否扁平化为只读PDF；true时用户不能继续编辑表单控件
 	 * @param fontFamily 默认字体路径，支持绝对路径、相对路径和 resources: 前缀
-	 * @return
+	 * @return 完成填充和可选排版后的 PDF 输出流
 	 */
 	public static ByteArrayOutputStream writePdf(PdfReader reader, Map<String, Object> param, boolean readOnly, String fontFamily) {
 		AcroFieldsHelp acroFieldsHelp = new AcroFieldsHelp();
@@ -163,11 +165,16 @@ public class PdfUtils {
 			// 替换占位符为数据中的内容
 			form = acroFieldsHelp.replaceContent(form, stamper, param, fontFamily);
 
-			stamper.setFormFlattening(readOnly);    // 如果为false那么生成的PDF文件还能编辑
+			TextFieldLayoutHelper textFieldLayoutHelper = acroFieldsHelp.getTextFieldLayoutHelper();
+			// 配置了垂直居中的字段先写入完整外观，完成排版后再按需扁平化。
+			stamper.setFormFlattening(readOnly && !textFieldLayoutHelper.hasCenteredFields());
 			stamper.close();
 			stamper = null;
 
 			reader.close();
+			if (textFieldLayoutHelper.hasCenteredFields()) {
+				bos = textFieldLayoutHelper.apply(bos, readOnly);
+			}
 		} catch (Exception e) {
 			throw new RuntimeException("写入PDF表单失败", e);
 		} finally {
